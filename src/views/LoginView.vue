@@ -3,8 +3,24 @@
     <div class="login-bg left"></div>
     <div class="login-bg right"></div>
 
-    <img class="cut naruto" :src="narutoImg" alt="鸣人" />
-    <img class="cut ichigo" :src="ichigoImg" alt="一护" />
+    <!-- 阵营立绘：选中/悬停时放大并外发光 -->
+    <div
+      class="cut-slot naruto"
+      :class="{ active: activeFaction === 'ninja', dimmed: activeFaction === 'shinigami' }"
+      @mouseenter="hoverFaction = 'ninja'"
+      @mouseleave="hoverFaction = null"
+    >
+      <img class="cut" :src="narutoImg" alt="鸣人" />
+    </div>
+
+    <div
+      class="cut-slot ichigo"
+      :class="{ active: activeFaction === 'shinigami', dimmed: activeFaction === 'ninja' }"
+      @mouseenter="hoverFaction = 'shinigami'"
+      @mouseleave="hoverFaction = null"
+    >
+      <img class="cut" :src="ichigoImg" alt="一护" />
+    </div>
 
     <div class="card panel">
       <h1 class="grad-text title">BLEACH × NARUTO</h1>
@@ -59,10 +75,22 @@
       <div class="divider"><span>或使用阵营身份登录</span></div>
 
       <div class="oauth">
-        <button class="oauth-btn ninja" @click="oauth('木叶忍者')">
+        <button
+          class="oauth-btn ninja"
+          :class="{ picked: selectedFaction === 'ninja' }"
+          @mouseenter="hoverFaction = 'ninja'"
+          @mouseleave="hoverFaction = null"
+          @click="oauth('ninja', '木叶忍者')"
+        >
           <span class="dot"></span> 木叶忍者
         </button>
-        <button class="oauth-btn shinigami" @click="oauth('代理死神')">
+        <button
+          class="oauth-btn shinigami"
+          :class="{ picked: selectedFaction === 'shinigami' }"
+          @mouseenter="hoverFaction = 'shinigami'"
+          @mouseleave="hoverFaction = null"
+          @click="oauth('shinigami', '代理死神')"
+        >
           <span class="dot"></span> 代理死神
         </button>
       </div>
@@ -75,7 +103,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, onBeforeUnmount } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import narutoImg from '../assets/naruto_cut.png'
 import ichigoImg from '../assets/ichigo_cut.png'
 
@@ -90,6 +118,11 @@ const loading = ref(false)
 const error = ref('')
 const success = ref('')
 const hint = ref('')
+
+// 悬停优先，其次是已点选的阵营；activeFaction 决定哪侧立绘放大发光
+const hoverFaction = ref(null)
+const selectedFaction = ref(null)
+const activeFaction = computed(() => hoverFaction.value || selectedFaction.value)
 
 const REMEMBER_KEY = 'bn-login-remember'
 
@@ -140,8 +173,9 @@ function handleLogin() {
   }, 900)
 }
 
-function oauth(faction) {
-  toast(`正在跳转 ${faction} 身份授权…（演示）`)
+function oauth(faction, label) {
+  selectedFaction.value = faction
+  toast(`正在跳转 ${label} 身份授权…（演示）`)
 }
 </script>
 
@@ -158,21 +192,82 @@ function oauth(faction) {
 .login-bg.left  { background: radial-gradient(ellipse at 15% 40%, rgba(217, 84, 0, 0.32), transparent 55%); }
 .login-bg.right { background: radial-gradient(ellipse at 85% 40%, rgba(0, 78, 146, 0.42), transparent 55%); }
 
-.cut {
+/* 外层负责浮动与定位，内层 img 负责缩放与发光（分离以免 transform 冲突） */
+.cut-slot {
   position: absolute;
   bottom: 0;
   height: 80%;
   max-height: 660px;
+  animation: float 5s ease-in-out infinite;
+  transition: opacity 0.45s ease;
+}
+.cut-slot.naruto { left: 3%; }
+.cut-slot.ichigo { right: 3%; animation-delay: 2.5s; }
+
+/* 脚下的阵营光晕 */
+.cut-slot::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 2%;
+  width: 130%;
+  height: 26%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.cut-slot.naruto::after  { background: radial-gradient(ellipse, rgba(255, 140, 26, 0.55), transparent 68%); }
+.cut-slot.ichigo::after  { background: radial-gradient(ellipse, rgba(0, 200, 255, 0.5), transparent 68%); }
+.cut-slot.active::after  { opacity: 1; }
+
+.cut {
+  height: 100%;
+  width: auto;
+  display: block;
+  transform-origin: bottom center;
+  transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1), filter 0.45s ease;
   filter: drop-shadow(0 0 30px rgba(0, 0, 0, 0.8));
   pointer-events: none;
-  animation: float 5s ease-in-out infinite;
 }
-.cut.naruto { left: 3%; }
-.cut.ichigo { right: 3%; animation-delay: 2.5s; }
 
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-12px); }
+}
+
+/* ===== 选中/悬停：放大 + 外发光 ===== */
+.cut-slot.active .cut {
+  transform: scale(1.16) translateY(-14px);
+  filter:
+    drop-shadow(0 0 22px rgba(255, 140, 26, 0.85))
+    drop-shadow(0 0 55px rgba(255, 106, 0, 0.6))
+    brightness(1.12);
+  animation: glow-pulse 2.2s ease-in-out infinite;
+}
+.cut-slot.ichigo.active .cut {
+  filter:
+    drop-shadow(0 0 22px rgba(0, 229, 255, 0.85))
+    drop-shadow(0 0 55px rgba(0, 120, 255, 0.6))
+    brightness(1.12);
+  animation: glow-pulse-ichigo 2.2s ease-in-out infinite;
+}
+
+/* 未选中的一侧轻微退后，突出焦点 */
+.cut-slot.dimmed .cut {
+  transform: scale(0.94);
+  filter: drop-shadow(0 0 20px rgba(0, 0, 0, 0.8)) brightness(0.62) saturate(0.75);
+}
+.cut-slot.dimmed { opacity: 0.75; }
+
+@keyframes glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 22px rgba(255, 140, 26, 0.8)) drop-shadow(0 0 50px rgba(255, 106, 0, 0.5)) brightness(1.1); }
+  50%      { filter: drop-shadow(0 0 30px rgba(255, 180, 60, 1))   drop-shadow(0 0 85px rgba(255, 106, 0, 0.75)) brightness(1.2); }
+}
+@keyframes glow-pulse-ichigo {
+  0%, 100% { filter: drop-shadow(0 0 22px rgba(0, 229, 255, 0.8)) drop-shadow(0 0 50px rgba(0, 120, 255, 0.5)) brightness(1.1); }
+  50%      { filter: drop-shadow(0 0 30px rgba(120, 240, 255, 1)) drop-shadow(0 0 85px rgba(0, 120, 255, 0.75)) brightness(1.2); }
 }
 
 .card {
@@ -311,6 +406,19 @@ function oauth(faction) {
 .oauth-btn.ninja:hover { color: var(--c-ninja); border-color: var(--c-ninja); background: rgba(255, 140, 26, 0.08); }
 .oauth-btn.shinigami:hover { color: var(--c-shinigami); border-color: var(--c-shinigami); background: rgba(0, 229, 255, 0.08); }
 
+/* 已点选的阵营按钮保持高亮 */
+.oauth-btn.picked { color: var(--c-text); }
+.oauth-btn.ninja.picked {
+  border-color: var(--c-ninja);
+  background: rgba(255, 140, 26, 0.14);
+  box-shadow: 0 0 16px rgba(255, 140, 26, 0.35);
+}
+.oauth-btn.shinigami.picked {
+  border-color: var(--c-shinigami);
+  background: rgba(0, 229, 255, 0.14);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.35);
+}
+
 .register {
   margin-top: 20px;
   font-size: 13px;
@@ -331,6 +439,7 @@ function oauth(faction) {
 }
 
 @media (max-width: 900px) {
-  .cut { opacity: 0.3; height: 60%; }
+  .cut-slot { opacity: 0.3; height: 60%; }
+  .cut-slot.active { opacity: 1; }
 }
 </style>

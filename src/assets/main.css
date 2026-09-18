@@ -1,0 +1,106 @@
+:root {
+  /* 双阵营主题色 */
+  --c-ninja: #ff8c1a;
+  --c-ninja-deep: #d95400;
+  --c-shinigami: #00e5ff;
+  --c-shinigami-deep: #004e92;
+  --c-bg: #0a0a12;
+  --c-panel: rgba(18, 18, 30, 0.85);
+  --c-text: #e8e8f0;
+  --c-dim: #9a9ab0;
+  --grad-title: linear-gradient(90deg, #ff8c1a 0%, #ffd24a 30%, #ffffff 50%, #4dd8ff 70%, #0080ff 100%);
+  --font-display: 'Noto Serif SC', 'STZhongsong', serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+/* ===== 渐变文字 ===== */
+.grad-text {
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ===== 火焰粒子特效 ===== */
+.flames {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.flame {
+  position: absolute;
+  bottom: -40px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  filter: blur(1px);
+  opacity: 0;
+  animation: rise linear infinite;
+}
+
+@keyframes rise {
+  0%   { transform: translateY(0) scale(0.4); opacity: 0; }
+  12%  { opacity: 0.9; }
+  100% { transform: translateY(-105vh) scale(1.6); opacity: 0; }
+}
+
+/* ===== 通用按钮 ===== */
+.g-btn {
+  position: relative;
+  padding: 14px 42px;
+  font-size: 17px;
+  letter-spacing: 4px;
+  color: var(--c-text);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background:
+    linear-gradient(var(--c-bg), var(--c-bg)) padding-box,
+    var(--grad-title) border-box;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.g-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255, 140, 26, 0.25), 0 6px 24px rgba(0, 128, 255, 0.25);
+}
+
+.g-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ===== 面板 ===== */
+.panel {
+  background: var(--c-panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+}

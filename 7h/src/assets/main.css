@@ -1,0 +1,515 @@
+:root {
+  /* ===== 青禾主题 =====
+     主色取自看板娘「青禾」素材的实测色：抹茶绿 / 薄荷 / 墨绿底，
+     点缀色用荧光酸绿，做出当下流行的酸性前卫感。
+     旧变量 --c-ninja / --c-shinigami 保留为别名，
+     全站 60 余处引用无需逐个改名即可整体换色。 */
+  --c-qinghe: #8fd0ae;
+  --c-mint: #c2d6cc;
+  --c-qinghe-deep: #41584c;
+  --c-acid: #d9ff4d;
+
+  --c-ninja: var(--c-qinghe);
+  --c-ninja-deep: var(--c-qinghe-deep);
+  --c-shinigami: var(--c-mint);
+  --c-shinigami-deep: #25332c;
+
+  --c-bg: #0b0e11;
+  --c-panel: rgba(16, 20, 24, 0.78);
+  --c-text: #e9edf0;
+  --c-dim: #96a1a9;
+  --grad-title: linear-gradient(90deg, #8fd0ae 0%, #cfe0d7 38%, #f0f3f1 68%, #ffffff 100%);
+  --font-display: 'Noto Serif SC', 'STZhongsong', serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+/* ===== 渐变文字 ===== */
+.grad-text {
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ===== 全站网格 + 噪点叠加层 =====
+   叠在背景图之上、内容之下，给画面一层细腻的秩序感。
+   用径向遮罩让中心区域淡出，避免干扰正文阅读。 */
+.site-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(184, 230, 207, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(184, 230, 207, 0.045) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 28%, #000 22%, transparent 76%);
+  mask-image: radial-gradient(ellipse at 50% 28%, #000 22%, transparent 76%);
+}
+
+/* 光标辉光：跟随鼠标的一团青禾柔光，只在大屏精确指针设备上启用 */
+.cursor-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 560px;
+  height: 560px;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(190, 210, 200, 0.07) 0%, rgba(143, 208, 174, 0.03) 34%, transparent 68%);
+  mix-blend-mode: screen;
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+@media (pointer: coarse) {
+  .cursor-glow { display: none; }
+}
+
+/* ===== 青禾叶片粒子（components/Leaves.vue）===== */
+.leaves {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.leaf {
+  position: absolute;
+  top: -40px;
+  width: 11px;
+  height: 11px;
+  border-radius: 0 68% 0 68%;
+  filter: blur(0.4px);
+  opacity: 0;
+  will-change: transform;
+  animation: leaf-fall linear infinite;
+}
+
+@keyframes leaf-fall {
+  0%   { transform: translate3d(0, -6vh, 0) rotate(0deg); opacity: 0; }
+  8%   { opacity: 0.75; }
+  25%  { transform: translate3d(3vw, 22vh, 0) rotate(96deg); }
+  50%  { transform: translate3d(-2vw, 50vh, 0) rotate(186deg); }
+  75%  { transform: translate3d(2.4vw, 78vh, 0) rotate(272deg); }
+  92%  { opacity: 0.55; }
+  100% { transform: translate3d(0, 108vh, 0) rotate(360deg); opacity: 0; }
+}
+
+/* 系统「最佳性能」会让浏览器上报 prefers-reduced-motion: reduce，
+   此前在此直接把叶片隐藏了。叶片是本页的氛围主体，故不再因该设置关闭，
+   仅在下面的低动效分支里放慢速度，保持可见。 */
+@media (prefers-reduced-motion: reduce) {
+  .leaf { animation-duration: 18s !important; }
+}
+
+/* ===== 通用按钮 ===== */
+.g-btn {
+  position: relative;
+  padding: 14px 42px;
+  font-size: 17px;
+  letter-spacing: 4px;
+  color: var(--c-text);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background:
+    linear-gradient(var(--c-bg), var(--c-bg)) padding-box,
+    var(--grad-title) border-box;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.g-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(150, 182, 168, 0.18), 0 6px 24px rgba(190, 208, 200, 0.1);
+}
+
+.g-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 主按钮小尺寸：分页 / 搜索 / 发送等，统一覆写入口，避免各页面各写一份 */
+.g-btn.g-btn-sm {
+  padding: 8px 20px;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+/* ===== 次级按钮：点赞 / 关注 / 私信 / 编辑资料，全局唯一定义 ===== */
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--c-dim);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.mini-btn:hover { color: var(--c-text); border-color: rgba(255, 255, 255, 0.32); }
+.mini-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.mini-btn.on {
+  color: #ff6b8a;
+  border-color: rgba(255, 107, 138, 0.5);
+  background: rgba(255, 107, 138, 0.12);
+}
+/* 互相关注：与单向关注（粉）区分，用薄荷色 */
+.mini-btn.mutual {
+  color: var(--c-mint);
+  border-color: rgba(150, 182, 168, 0.55);
+  background: rgba(150, 182, 168, 0.14);
+}
+.mini-btn.mutual:hover {
+  color: var(--c-mint);
+  border-color: rgba(150, 182, 168, 0.8);
+}
+.mini-btn.danger {
+  color: #ff8080;
+  border-color: rgba(255, 128, 128, 0.35);
+}
+.mini-btn.danger:hover {
+  color: #ff5c5c;
+  border-color: rgba(255, 92, 92, 0.6);
+  background: rgba(255, 92, 92, 0.12);
+}
+
+/* ===== 分段选择器：发布/草稿等二选一场景，全局唯一定义 ===== */
+.seg-btn {
+  padding: 7px 18px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-dim);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.seg-btn:hover { color: var(--c-text); border-color: rgba(255, 255, 255, 0.32); }
+.seg-btn.on {
+  color: var(--c-text);
+  border-color: rgba(150, 182, 168, 0.36);
+  background: rgba(150, 182, 168, 0.12);
+}
+
+/* ===== 滚动条 =====
+   统一一套清晰可见的深色滚动条。
+   原来的 6px + 0.14 白几乎看不见，且 -webkit- 伪元素在 Firefox 上完全无效，
+   这里同时给标准属性（Firefox）和 WebKit 伪元素两套写法。 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 230, 207, 0.3) rgba(255, 255, 255, 0.04);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  /* border + background-clip 让滑块比轨道窄，视觉上更精致 */
+  background: rgba(184, 230, 207, 0.26);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(188, 205, 197, 0.3);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ===== 面板 ===== */
+.panel {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 42%),
+    var(--c-panel);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 4px 18px rgba(0, 0, 0, 0.22);
+  transition: border-color 0.22s ease, box-shadow 0.22s ease;
+}
+/* 顶部细光带：给卡片一个统一的高光边缘 */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(150, 182, 168, 0.34),
+    rgba(190, 210, 200, 0.26),
+    transparent
+  );
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 可交互卡片的统一悬浮反馈 */
+.panel.hoverable {
+  cursor: pointer;
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+.panel.hoverable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 10px 28px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(150, 182, 168, 0.09);
+}
+
+/* 页面头部图标（各功能页标题左侧的氛围图标） */
+.ph-icon {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(184, 230, 207, 0.22), transparent 62%),
+    radial-gradient(circle at 75% 80%, rgba(150, 182, 168, 0.18), transparent 62%),
+    rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* 统一空状态：大图标 + 说明文案 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 42px 20px;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-dim);
+}
+.empty-state .es-ico {
+  font-size: 38px;
+  line-height: 1;
+  opacity: 0.85;
+  filter: grayscale(0.25);
+}
+
+/* ===== 二级页统一骨架 =====
+   博客列表 / 文章详情 / 用户主页 / 个人资料 / 私信 / 写文章 共用同一套容器宽度、
+   标题字号与顶部留白，避免每个页面各写一份导致视觉参差。
+   基类不设 overflow：私信页靠 flex 撑满高度排版，交回各页面自己控制。 */
+.pg-shell {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  margin: 0 auto;
+  padding: 74px 0 36px;
+}
+.pg-shell.narrow { width: min(640px, 92vw); }
+.pg-shell.mid { width: min(820px, 94vw); }
+.pg-shell.wide { width: min(900px, 94vw); }
+
+.pg-head { text-align: center; margin-bottom: 20px; }
+.pg-title {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 3.6vw, 30px);
+  letter-spacing: 6px;
+}
+.pg-sub {
+  font-size: 13px;
+  letter-spacing: 3px;
+  margin-top: 6px;
+}
+/* 标题下渐变装饰线 */
+.pg-sub::after {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 2px;
+  margin: 12px auto 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(143, 208, 174, 0.9), rgba(217, 255, 77, 0.85));
+  box-shadow: 0 0 12px rgba(150, 182, 168, 0.26), 0 0 12px rgba(217, 255, 77, 0.22);
+}
+
+/* 二级页统一导航条：固定右上角，内容由 PageNav 组件按页面配置 */
+.pg-nav {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.pg-nav .auth-link {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  color: var(--c-dim);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+.pg-nav .auth-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.28);
+  text-decoration: none;
+}
+.pg-nav .auth-link.danger { color: #ff8a8a; }
+.pg-nav .auth-link.danger:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.45);
+}
+
+/* ============================================================
+   全站统一返回键（components/BackButton.vue）
+   胶囊 + 左箭头 + 玻璃底；hover 箭头左移、描边青禾点亮
+   ============================================================ */
+.back-btn {
+  --bb-tint: var(--c-mint);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 16px 0 12px;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  line-height: 1;
+  color: var(--c-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.22s ease, background 0.22s ease,
+    border-color 0.22s ease, box-shadow 0.22s ease, transform 0.14s ease;
+}
+
+.back-btn .bb-arrow {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--bb-tint);
+  opacity: 0.85;
+  transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1), opacity 0.22s ease;
+}
+
+.back-btn:hover {
+  color: #fff;
+  background: rgba(150, 182, 168, 0.1);
+  border-color: rgba(184, 230, 207, 0.55);
+  box-shadow: 0 0 0 3px rgba(150, 182, 168, 0.07), 0 8px 22px rgba(150, 182, 168, 0.14);
+}
+.back-btn:hover .bb-arrow {
+  opacity: 1;
+  transform: translateX(-3px);
+}
+
+.back-btn:active { transform: scale(0.965); }
+
+.back-btn:focus-visible {
+  outline: 2px solid rgba(184, 230, 207, 0.65);
+  outline-offset: 2px;
+}
+
+/* 固定在视口左上角：所有二级页的返回键都放这个位置 */
+.back-btn.is-fixed {
+  position: fixed;
+  top: 18px;
+  left: 22px;
+  z-index: 40;
+}
+
+/* 只显示箭头的紧凑圆形版本（label 传空时自动生效） */
+.back-btn:not(:has(.bb-text)) {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* 轻量文字链版本：用在登录 / 注册卡片内部 */
+.back-btn.is-text {
+  height: auto;
+  padding: 4px 2px;
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: var(--c-mint);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  vertical-align: middle;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.back-btn.is-text:hover {
+  color: #fff;
+  background: none;
+  border: none;
+  box-shadow: none;
+  text-shadow: 0 0 14px rgba(184, 230, 207, 0.55);
+}
+.back-btn.is-text:hover .bb-arrow { transform: translateX(-3px); }
+
+@media (max-width: 700px) {
+  .pg-nav { top: 12px; right: 12px; gap: 12px; }
+  .pg-shell { padding-top: 64px; }
+  .back-btn.is-fixed { top: 12px; left: 12px; }
+  .back-btn { height: 30px; padding: 0 12px 0 10px; font-size: 12px; }
+}

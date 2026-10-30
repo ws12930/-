@@ -1,172 +1,373 @@
 <template>
   <div class="community-page">
-    <PageNav :items="navItems" />
-    <BackButton is-fixed label="返回" />
+    <TopBar back="home" back-label="返回首页" />
 
     <div class="pg-shell mid">
       <header class="pg-head">
-        <h1 class="pg-title grad-text">社 区</h1>
-        <p class="pg-sub grad-text">发现有意思的博主</p>
+        <h1 class="pg-title grad-text">社 区 广 场</h1>
+        <p class="pg-sub grad-text">像逛贴吧一样，逛大家的文章</p>
       </header>
 
-      <div class="cm-search">
-        <input v-model.trim="keyword" type="text" placeholder="按昵称搜索用户" @keydown.enter="doSearch" />
-        <button class="g-btn g-btn-sm" :disabled="searching" @click="doSearch">
-          {{ searching ? '搜索中…' : '搜索' }}
+      <!-- 吧导航：分类即吧 -->
+      <nav class="ba-nav">
+        <button
+          class="ba-chip"
+          :class="{ on: categoryId === '' }"
+          type="button"
+          @click="switchBa('')"
+        >
+          全部
         </button>
+        <button
+          v-for="ba in bars"
+          :key="ba.id"
+          class="ba-chip"
+          :class="{ on: categoryId === String(ba.id) }"
+          type="button"
+          @click="switchBa(String(ba.id))"
+        >
+          {{ ba.name }}<span class="ba-cnt">{{ ba.count }}</span>
+        </button>
+      </nav>
+
+      <!-- 排序 + 搜索 -->
+      <div class="cp-toolbar">
+        <div class="cp-tabs">
+          <button
+            class="cp-tab"
+            :class="{ on: sort === 'hot' }"
+            type="button"
+            @click="switchSort('hot')"
+          >
+            🔥 热门
+          </button>
+          <button
+            class="cp-tab"
+            :class="{ on: sort === 'latest' }"
+            type="button"
+            @click="switchSort('latest')"
+          >
+            🕘 最新
+          </button>
+        </div>
+        <input
+          v-model.trim="keyword"
+          class="cp-search"
+          type="search"
+          placeholder="搜索标题 / 摘要"
+          @keydown.enter="load(1)"
+        />
+        <button class="g-btn g-btn-sm" :disabled="loading" @click="load(1)">搜索</button>
       </div>
 
-      <p v-if="error" class="ct-error">{{ error }}</p>
+      <p v-if="error" class="cp-error">{{ error }}</p>
 
       <div v-if="loading" class="empty-state"><span class="es-ico">🌾</span><span>正在加载…</span></div>
-      <div v-else-if="!users.length" class="empty-state">
+      <div v-else-if="!posts.length" class="empty-state">
         <span class="es-ico">🫧</span>
-        <span>没有找到匹配的用户</span>
+        <span>{{ keyword ? '没有匹配的帖子' : '这个吧还没有帖子，去写第一篇吧' }}</span>
       </div>
 
-      <ul v-else class="ct-list">
-        <li v-for="u in users" :key="u.id" class="panel hoverable ct-item">
-          <UserAvatar :user="u" :size="44" />
-          <div class="ct-main" @click="openUser(u)">
-            <span class="ct-name">{{ u.nickname || u.username }}</span>
-            <span class="ct-sign">{{ u.signature || '这个人很神秘，什么都没写' }}</span>
+      <!-- 帖子流 -->
+      <ul v-else class="tb-list">
+        <li
+          v-for="p in posts"
+          :key="p.id"
+          class="panel hoverable tb-item"
+          @click="openPost(p)"
+        >
+          <UserAvatar :user="authorOf(p)" :size="44" />
+          <div class="tb-main">
+            <div class="tb-title-line">
+              <span v-if="p.pinned" class="tb-badge pin">顶</span>
+              <span class="tb-title">{{ p.title || '（无标题）' }}</span>
+            </div>
+            <p class="tb-summary">{{ plainSummary(p.summary) || '作者没有写摘要' }}</p>
+            <div class="tb-meta">
+              <span class="tb-author">{{ p.authorName || '匿名' }}</span>
+              <span class="tb-ba">『{{ p.categoryName || '无吧' }}』</span>
+              <span class="tb-stat reply">{{ p.commentCount ?? 0 }} 回复</span>
+              <span class="tb-stat">{{ p.viewCount ?? 0 }} 浏览</span>
+              <span class="tb-stat">赞 {{ p.likeCount ?? 0 }}</span>
+              <span class="tb-time">{{ formatTime(p.publishedAt || p.createdAt) }}</span>
+            </div>
           </div>
-          <span class="ct-fans">{{ u.followerCount ?? 0 }} 粉丝</span>
-          <button
-            v-if="!isSelf(u)"
-            class="mini-btn"
-            :class="{ on: u.followed, mutual: u.followed && u.mutual }"
-            type="button"
-            :disabled="busyId === u.id"
-            @click="follow(u)"
-          >
-            {{ followLabel(u) }}
-          </button>
         </li>
       </ul>
+
+      <Pager
+        :current="page.current" :pages="page.pages" :total="page.total"
+        :disabled="loading"
+        @go="load"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listCommunity, searchUsers, toggleFollow } from '../api/social'
-import PageNav from '../components/PageNav.vue'
-import BackButton from '../components/BackButton.vue'
+import { listPosts, listCategoryStats } from '../api/blog'
+import TopBar from '../components/TopBar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import Pager from '../components/Pager.vue'
+import { toPlainSummary } from '../utils/richText'
 
 const router = useRouter()
 
-const users = ref([])
+const bars = ref([])          // 吧（分类 + 帖子数）
+const posts = ref([])
 const keyword = ref('')
+const categoryId = ref('')    // 当前选中的吧；'' = 全部
+const sort = ref('hot')       // hot | latest
 const loading = ref(false)
-const searching = ref(false)
-const busyId = ref(null)
 const error = ref('')
+const page = ref({ current: 1, size: 10, total: 0, pages: 1 })
 
-const me = ref(null)
-try {
-  me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
-} catch {
-  me.value = null
+const plainSummary = (s) => toPlainSummary(s, 60)
+
+function authorOf(p) {
+  return { avatar: p.authorAvatar, faction: p.authorFaction, username: p.authorName, nickname: p.authorName }
 }
 
-const navItems = [{ label: '首页', to: 'home' }]
-
-function isSelf(u) {
-  return !!me.value && u.id === me.value.id
+function formatTime(v) {
+  if (!v) return ''
+  const d = new Date(String(v).replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10)
+  const diff = Date.now() - d.getTime()
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return '刚刚'
+  if (min < 60) return min + ' 分钟前'
+  const hour = Math.floor(min / 60)
+  if (hour < 24) return hour + ' 小时前'
+  const day = Math.floor(hour / 24)
+  if (day < 30) return day + ' 天前'
+  return String(v).slice(0, 10)
 }
 
-async function load() {
+async function loadBars() {
+  try {
+    const res = await listCategoryStats()
+    bars.value = res.data || []
+  } catch {
+    bars.value = []
+  }
+}
+
+function pickPage(data, prev) {
+  return {
+    current: data?.current || 1,
+    size: data?.size || prev.size,
+    total: data?.total || 0,
+    pages: data?.pages || 1
+  }
+}
+
+async function load(next = 1) {
   loading.value = true
   error.value = ''
   try {
-    const res = await listCommunity(100)
-    users.value = res.data || []
+    const res = await listPosts({
+      current: next,
+      size: page.value.size,
+      keyword: keyword.value,
+      categoryId: categoryId.value || undefined,
+      sort: sort.value
+    })
+    posts.value = res.data?.records || []
+    page.value = pickPage(res.data, page.value)
   } catch (e) {
     error.value = e.message || '加载失败'
-    users.value = []
+    posts.value = []
   } finally {
     loading.value = false
   }
 }
 
-async function doSearch() {
-  const kw = keyword.value
-  if (!kw) {
-    await load()
-    return
-  }
-  searching.value = true
-  error.value = ''
-  try {
-    const res = await searchUsers(kw, 20)
-    users.value = res.data || []
-  } catch (e) {
-    error.value = e.message || '搜索失败'
-    users.value = []
-  } finally {
-    searching.value = false
-  }
+function switchBa(id) {
+  if (categoryId.value === id) return
+  categoryId.value = id
+  load(1)
 }
 
-/** 关注按钮文案：互相关注 > 已关注 > 未关注 */
-function followLabel(u) {
-  if (!u.followed) return '+ 关注'
-  return u.mutual ? '互相关注' : '已关注'
+function switchSort(s) {
+  if (sort.value === s) return
+  sort.value = s
+  load(1)
 }
 
-async function follow(u) {
-  busyId.value = u.id
-  try {
-    const res = await toggleFollow(u.id)
-    const d = res.data || {}
-    u.followed = d.followed ?? !u.followed
-    u.mutual = !!d.mutual
-    if (typeof d.followerCount === 'number') u.followerCount = d.followerCount
-  } catch (e) {
-    error.value = e.message || '操作失败'
-  } finally {
-    busyId.value = null
-  }
+function openPost(p) {
+  router.push({ name: 'post', params: { slug: p.slug } })
 }
 
-function openUser(u) {
-  router.push({ name: 'user', params: { id: u.id } })
-}
-
-onMounted(load)
+onMounted(() => {
+  loadBars()
+  load(1)
+})
 </script>
 
 <style scoped>
-.community-page { height: 100%; overflow-y: auto; }
-.ct-error { text-align: center; color: #ff8a8a; font-size: 13px; margin-bottom: 12px; }
+.community-page {
+  min-height: 100vh;
+  padding: 96px 16px 48px;
+  box-sizing: border-box;
+}
+.community-page .pg-shell {
+  max-width: 860px;
+}
 
-.cm-search { display: flex; gap: 10px; margin-bottom: 16px; }
-.cm-search input {
+/* 吧导航 */
+.ba-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 12px;
+}
+.ba-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 15px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ba-chip:hover { color: var(--c-text); border-color: rgba(255, 255, 255, 0.3); }
+.ba-chip.on {
+  color: #fff;
+  background: rgba(150, 182, 168, 0.16);
+  border-color: var(--c-ninja);
+}
+.ba-cnt {
+  font-size: 11px;
+  color: var(--c-dim);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.ba-chip.on .ba-cnt { color: #fff; background: rgba(255, 255, 255, 0.16); }
+
+/* 排序 + 搜索 */
+.cp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.cp-tabs { display: flex; gap: 6px; }
+.cp-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-dim);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cp-tab:hover { color: var(--c-text); }
+.cp-tab.on {
+  color: #fff;
+  border-bottom-color: var(--c-ninja);
+}
+.cp-search {
   flex: 1;
-  padding: 10px 13px;
-  font-size: 14px;
+  max-width: 280px;
+  margin-left: auto;
+  padding: 9px 14px;
+  font-size: 13px;
   color: var(--c-text);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
+  border-radius: 999px;
   outline: none;
-  font-family: inherit;
 }
-.cm-search input:focus { border-color: var(--c-ninja); }
+.cp-search:focus { border-color: var(--c-ninja); }
 
-.ct-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.ct-item { display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
-.ct-main { flex: 1; min-width: 0; display: flex; flex-direction: column; cursor: pointer; }
-.ct-name { font-size: 14px; }
-.ct-sign {
-  font-size: 12px;
+.cp-error {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #ff8a8a;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.25);
+  border-radius: 10px;
+}
+
+/* 帖子流 */
+.tb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tb-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+.tb-main {
+  flex: 1;
+  min-width: 0;
+}
+.tb-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tb-badge {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 11px;
+  border-radius: 4px;
+  letter-spacing: 0;
+}
+.tb-badge.pin {
+  color: #f0c674;
+  background: rgba(240, 198, 116, 0.14);
+}
+.tb-title {
+  font-size: 15px;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tb-item:hover .tb-title { color: var(--c-ninja); }
+.tb-summary {
+  margin: 6px 0;
+  font-size: 12.5px;
+  line-height: 1.6;
   color: var(--c-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ct-fans { font-size: 11px; color: var(--c-mint); flex: none; }
+.tb-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--c-dim);
+}
+.tb-author { color: var(--c-text); }
+.tb-ba { color: var(--c-ninja); }
+.tb-stat.reply { color: #9fb8d8; }
+.tb-time { margin-left: auto; }
+
+@media (max-width: 700px) {
+  .cp-toolbar { flex-wrap: wrap; }
+  .cp-search { max-width: none; flex-basis: 100%; order: 3; }
+  .tb-time { display: none; }
+}
 </style>

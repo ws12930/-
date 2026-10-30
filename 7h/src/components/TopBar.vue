@@ -132,14 +132,21 @@ const displayName = computed(
 /** 收起状态下靠这个红点提示「有未读」，具体数字展开后才看得到 */
 const totalUnread = computed(() => (unread.value || 0) + (notifUnread.value || 0))
 
-const menuItems = computed(() => [
-  { key: 'profile', label: '个人资料' },
-  { key: 'mine', label: '我的文章' },
-  { key: 'editor', label: '写文章' },
-  { key: 'notifications', label: '消息', badge: notifUnread.value },
-  { key: 'messages', label: '私信', badge: unread.value },
-  { key: 'community', label: '社区广场' }
-])
+const menuItems = computed(() => {
+  const items = [
+    { key: 'profile', label: '个人资料' },
+    { key: 'mine', label: '我的文章' },
+    { key: 'editor', label: '写文章' },
+    { key: 'notifications', label: '消息', badge: notifUnread.value },
+    { key: 'messages', label: '私信', badge: unread.value },
+    { key: 'community', label: '社区广场' }
+  ]
+  // 管理员专属入口
+  if (me.value?.role === 'ADMIN') {
+    items.push({ key: 'admin', label: '后台管理' })
+  }
+  return items
+})
 
 function toggleMenu() {
   open.value = !open.value

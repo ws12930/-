@@ -1,6 +1,7 @@
 package com.fenglin.blog.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fenglin.blog.common.BizException;
@@ -30,9 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /** 文章：列表、详情、新建、编辑、删除、置顶 */
@@ -67,9 +70,12 @@ public class PostService {
 
     /* ================= 读 ================= */
 
-    /** 已发布文章分页：置顶优先，其余按发布时间倒序 */
+    /**
+     * 已发布文章分页：置顶优先。
+     * sort = latest（默认）按发布时间倒序；sort = hot 按热度加权（浏览 + 点赞×5 + 回复×3）。
+     */
     public PageResult<PostVO> listPublished(long current, long size, String keyword,
-                                            Long categoryId, Long tagId) {
+                                            Long categoryId, Long tagId, String sort) {
         LambdaQueryWrapper<Post> query = new LambdaQueryWrapper<Post>()
                 .ne(Post::getStatus, DRAFT);
         if (keyword != null && !keyword.isBlank()) {
@@ -86,11 +92,50 @@ public class PostService {
             }
             query.in(Post::getId, postIds);
         }
-        query.orderByDesc(Post::getPinned)
-                .orderByDesc(Post::getPinnedAt)
-                .orderByDesc(Post::getPublishedAt)
-                .orderByDesc(Post::getId);
+        if ("hot".equalsIgnoreCase(sort)) {
+            // 固定字符串拼接（无用户输入）。回复数不在本表，用子查询统计未删除评论
+            query.last("ORDER BY pinned DESC, (view_count + like_count * 5 + "
+                    + "(SELECT COUNT(*) FROM blog_comment cc WHERE cc.post_id = blog_post.id AND cc.deleted = 0) * 3"
+                    + ") DESC, id DESC");
+        } else {
+            query.orderByDesc(Post::getPinned)
+                    .orderByDesc(Post::getPinnedAt)
+                    .orderByDesc(Post::getPublishedAt)
+                    .orderByDesc(Post::getId);
+        }
         return toPageResult(postMapper.selectPage(pageOf(current, size), query));
+    }
+
+    /** 各吧（分类）的帖子数：社区广场吧导航用 */
+    public List<Map<String, Object>> categoryStats() {
+        List<Map<String, Object>> rows = postMapper.selectMaps(
+                new QueryWrapper<Post>()
+                        .select("category_id", "COUNT(*) AS cnt")
+                        .ne("status", DRAFT)
+                        .isNotNull("category_id")
+                        .groupBy("category_id"));
+        Map<Long, Long> counts = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            Object cid = row.get("category_id");
+            Object cnt = row.get("cnt");
+            if (cid != null && cnt != null) {
+                try {
+                    counts.put(Long.parseLong(cid.toString()), Long.parseLong(cnt.toString()));
+                } catch (NumberFormatException ignored) {
+                    // 脏数据直接跳过
+                }
+            }
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Category c : categoryMapper.selectList(
+                new LambdaQueryWrapper<Category>().orderByAsc(Category::getSortOrder))) {
+            result.add(Map.of(
+                    "id", c.getId(),
+                    "name", c.getName(),
+                    "slug", c.getSlug(),
+                    "count", counts.getOrDefault(c.getId(), 0L)));
+        }
+        return result;
     }
 
     /** 文章详情并累加浏览量 */

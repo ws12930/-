@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -39,8 +40,15 @@ public class PostController {
             @RequestParam(defaultValue = "10") long size,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) Long tagId) {
-        return R.ok(postService.listPublished(current, size, keyword, categoryId, tagId));
+            @RequestParam(required = false) Long tagId,
+            @RequestParam(required = false) String sort) {
+        return R.ok(postService.listPublished(current, size, keyword, categoryId, tagId, sort));
+    }
+
+    /** 各吧（分类）的帖子数：社区广场吧导航用 */
+    @GetMapping("/category-stats")
+    public R<List<Map<String, Object>>> categoryStats() {
+        return R.ok(postService.categoryStats());
     }
 
     @GetMapping("/slug/{slug}")

@@ -73,6 +73,11 @@ export function listCategories() {
   return request('/categories')
 }
 
+/** 各吧（分类）帖子数：社区广场吧导航用 */
+export function listCategoryStats() {
+  return request('/posts/category-stats')
+}
+
 /** 标签列表 */
 export function listTags() {
   return request('/tags')

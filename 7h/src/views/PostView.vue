@@ -30,7 +30,7 @@
       <section v-if="post" class="panel comments">
         <h2 class="cm-title">
           <span class="ph-icon">💬</span>
-          评论 {{ comments.length }}
+          全部回复 {{ comments.length }}
         </h2>
 
         <div v-if="logged" class="cm-editor">
@@ -86,7 +86,9 @@
             <div class="cm-main">
               <div class="cm-line">
                 <span class="cm-name">{{ authorName(c) }}</span>
+                <span v-if="isOp(c)" class="cm-op">楼主</span>
                 <span class="cm-time">{{ formatTime(c.createdAt) }}</span>
+                <span class="cm-floor">{{ floorOf(c) }} 楼</span>
               </div>
               <RichText :content="c.content" variant="comment" class="cm-text" />
               <div class="cm-ops">
@@ -282,6 +284,24 @@ const commentTree = computed(() => {
   })
   return roots
 })
+
+/** 楼层号：顶层评论按顺序编号（贴吧式盖楼） */
+const floorMap = computed(() => {
+  const map = {}
+  commentTree.value.forEach((c, i) => {
+    map[c.id] = i + 1
+  })
+  return map
+})
+
+function floorOf(c) {
+  return floorMap.value[c.id] ?? ''
+}
+
+/** 楼主标识：评论人是文章作者 */
+function isOp(c) {
+  return !!post.value && c.userId != null && c.userId === post.value.authorId
+}
 
 /** 回复目标的内容摘要，显示在输入框上方 */
 const replyQuote = computed(() =>
@@ -517,6 +537,21 @@ onBeforeUnmount(() => clearTimeout(highlightTimer))
 .cm-line { display: flex; align-items: baseline; gap: 8px; }
 .cm-name { font-size: 13px; color: var(--c-text); }
 .cm-time { font-size: 11px; color: var(--c-dim); }
+.cm-floor {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--c-dim);
+  opacity: 0.8;
+}
+.cm-op {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: #f0c674;
+  background: rgba(240, 198, 116, 0.14);
+  border-radius: 4px;
+}
 .cm-text { font-size: 13px; line-height: 1.75; color: var(--c-text); opacity: 0.92; word-break: break-word; }
 
 /* 评论操作（回复 / 删除） */

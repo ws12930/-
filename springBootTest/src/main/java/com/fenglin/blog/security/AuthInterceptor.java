@@ -52,10 +52,22 @@ public class AuthInterceptor implements HandlerInterceptor {
             }
         }
 
-        if (handler instanceof HandlerMethod handlerMethod
-                && handlerMethod.hasMethodAnnotation(RequireAuth.class)
-                && CurrentUserHolder.get() == null) {
-            throw BizException.unauthorized("请先登录");
+        if (handler instanceof HandlerMethod handlerMethod) {
+            if (handlerMethod.hasMethodAnnotation(RequireAuth.class)
+                    && CurrentUserHolder.get() == null) {
+                throw BizException.unauthorized("请先登录");
+            }
+            boolean needAdmin = handlerMethod.hasMethodAnnotation(RequireAdmin.class)
+                    || handlerMethod.getBeanType().isAnnotationPresent(RequireAdmin.class);
+            if (needAdmin) {
+                CurrentUser user = CurrentUserHolder.get();
+                if (user == null) {
+                    throw BizException.unauthorized("请先登录");
+                }
+                if (!user.isAdmin()) {
+                    throw BizException.forbidden("需要管理员权限");
+                }
+            }
         }
         return true;
     }

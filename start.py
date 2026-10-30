@@ -157,7 +157,7 @@ def start_backend():
     env.pop("SERVER__PORT", None)  # 避免被宽松绑定抢走 server.port
     creation = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
     proc = subprocess.Popen(
-        ["mvnw.cmd", "spring-boot:run", "-Dspring-boot.run.arguments=--server.port=%d" % BACKEND_PORT],
+        [os.path.join(BACKEND_DIR, "mvnw.cmd"), "spring-boot:run", "-Dspring-boot.run.arguments=--server.port=%d" % BACKEND_PORT],
         cwd=BACKEND_DIR,
         env=env,
         creationflags=creation,

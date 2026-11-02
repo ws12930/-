@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -54,10 +55,12 @@ public class PostService {
     private final PostLikeMapper postLikeMapper;
     private final UserMapper userMapper;
     private final LikeService likeService;
+    private final LevelService levelService;
 
     public PostService(PostMapper postMapper, CategoryMapper categoryMapper, TagMapper tagMapper,
                        PostTagMapper postTagMapper, CommentMapper commentMapper,
-                       PostLikeMapper postLikeMapper, UserMapper userMapper, LikeService likeService) {
+                       PostLikeMapper postLikeMapper, UserMapper userMapper, LikeService likeService,
+                       LevelService levelService) {
         this.postMapper = postMapper;
         this.categoryMapper = categoryMapper;
         this.tagMapper = tagMapper;
@@ -66,6 +69,7 @@ public class PostService {
         this.postLikeMapper = postLikeMapper;
         this.userMapper = userMapper;
         this.likeService = likeService;
+        this.levelService = levelService;
     }
 
     /* ================= 读 ================= */
@@ -129,11 +133,17 @@ public class PostService {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Category c : categoryMapper.selectList(
                 new LambdaQueryWrapper<Category>().orderByAsc(Category::getSortOrder))) {
-            result.add(Map.of(
-                    "id", c.getId(),
-                    "name", c.getName(),
-                    "slug", c.getSlug(),
-                    "count", counts.getOrDefault(c.getId(), 0L)));
+            // 用 HashMap 而不是 Map.of：吧主可能为空（系统内置分类），Map.of 不接受 null 值
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", c.getId());
+            item.put("name", c.getName());
+            item.put("slug", c.getSlug());
+            item.put("count", counts.getOrDefault(c.getId(), 0L));
+            item.put("ownerId", c.getOwnerId());
+            User owner = c.getOwnerId() == null ? null : userMapper.selectById(c.getOwnerId());
+            item.put("ownerName", owner == null ? null
+                    : (owner.getNickname() != null ? owner.getNickname() : owner.getUsername()));
+            result.add(item);
         }
         return result;
     }
@@ -186,6 +196,24 @@ public class PostService {
         return toPageResult(postMapper.selectPage(pageOf(current, size), query));
     }
 
+    /**
+     * 管理端：全站文章（含草稿），由 {@code AuthInterceptor} 的 @RequireAdmin 保证权限。
+     *
+     * @param keyword 按标题模糊搜索，可空
+     * @param status  DRAFT / PUBLISHED 精确筛选；空 / ALL 则不过滤
+     */
+    public PageResult<PostVO> listAll(long current, long size, String keyword, String status) {
+        LambdaQueryWrapper<Post> query = new LambdaQueryWrapper<Post>();
+        if (keyword != null && !keyword.isBlank()) {
+            query.like(Post::getTitle, keyword.trim());
+        }
+        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim())) {
+            query.eq(Post::getStatus, status.trim().toUpperCase());
+        }
+        query.orderByDesc(Post::getCreatedAt);
+        return toPageResult(postMapper.selectPage(pageOf(current, size), query));
+    }
+
     /* ================= 写 ================= */
 
     @Transactional
@@ -217,12 +245,17 @@ public class PostService {
         postMapper.insert(post);
 
         replaceTags(post.getId(), request.tagIds());
+        // 发布（非草稿）才计入经验，草稿不重复刷经验
+        if (!DRAFT.equalsIgnoreCase(status)) {
+            levelService.addExp(authorId, LevelService.EXP_POST);
+        }
         return toVO(post);
     }
 
     @Transactional
     public PostVO update(Long postId, PostRequest request) {
         Post post = requireOwnPost(postId);
+        boolean wasDraft = DRAFT.equalsIgnoreCase(post.getStatus());
         Category category = categoryMapper.selectById(request.categoryId());
         if (category == null) {
             throw BizException.badRequest("所选分类不存在");
@@ -247,6 +280,10 @@ public class PostService {
         postMapper.updateById(post);
 
         replaceTags(post.getId(), request.tagIds());
+        // 草稿转为发布时补发一次经验
+        if (wasDraft && !DRAFT.equalsIgnoreCase(status)) {
+            levelService.addExp(post.getAuthorId(), LevelService.EXP_POST);
+        }
         return toVO(post);
     }
 
@@ -270,17 +307,27 @@ public class PostService {
 
     /* ================= 辅助 ================= */
 
-    /** 取出文章并校验归属：作者本人或管理员 */
+    /** 取出文章并校验归属：作者本人、本吧吧主或管理员 */
     private Post requireOwnPost(Long postId) {
         CurrentUser current = CurrentUserHolder.require();
         Post post = postMapper.selectById(postId);
         if (post == null) {
             throw BizException.notFound("文章不存在或已删除");
         }
-        if (!post.getAuthorId().equals(current.userId()) && !current.isAdmin()) {
-            throw BizException.forbidden("只能操作自己的文章");
+        if (!post.getAuthorId().equals(current.userId()) && !current.isAdmin() && !isBaOwnerOf(post, current)) {
+            throw BizException.forbidden("只能操作自己的文章，或由本吧吧主管理");
         }
         return post;
+    }
+
+    /** 当前用户是否是该文章所属吧的吧主 */
+    private boolean isBaOwnerOf(Post post, CurrentUser current) {
+        if (post.getCategoryId() == null) {
+            return false;
+        }
+        Category category = categoryMapper.selectById(post.getCategoryId());
+        return category != null && category.getOwnerId() != null
+                && category.getOwnerId().equals(current.userId());
     }
 
     private Page<Post> pageOf(long current, long size) {

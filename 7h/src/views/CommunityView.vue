@@ -8,6 +8,26 @@
         <p class="pg-sub grad-text">像逛贴吧一样，逛大家的文章</p>
       </header>
 
+      <!-- 社区状态条：签到 / 等级称号 / 创建吧 -->
+      <div class="cp-status">
+        <div v-if="checkin" class="cp-checkin">
+          <span class="cp-lv">Lv{{ checkin.level }} · {{ checkin.title }}</span>
+          <span class="cp-exp">{{ checkin.exp }} 经验</span>
+          <span v-if="checkin.streak" class="cp-streak">连续 {{ checkin.streak }} 天</span>
+          <button
+            class="g-btn g-btn-sm cp-checkin-btn"
+            type="button"
+            :disabled="checkin.checked || checking"
+            @click="handleCheckin"
+          >
+            {{ checkin.checked ? '今日已签到' : (checking ? '签到中…' : '签到 +5') }}
+          </button>
+        </div>
+        <button class="g-btn g-btn-sm cp-create-btn" type="button" @click="openCreate">
+          ＋ 创建吧
+        </button>
+      </div>
+
       <!-- 吧导航：分类即吧 -->
       <nav class="ba-nav">
         <button
@@ -22,13 +42,20 @@
           v-for="ba in bars"
           :key="ba.id"
           class="ba-chip"
-          :class="{ on: categoryId === String(ba.id) }"
+          :class="{ on: categoryId === String(ba.id), mine: isMyBa(ba) }"
           type="button"
+          :title="ba.ownerName ? `吧主：${ba.ownerName}` : '站点分类'"
           @click="switchBa(String(ba.id))"
         >
-          {{ ba.name }}<span class="ba-cnt">{{ ba.count }}</span>
+          <span v-if="ba.ownerName" class="ba-crown">👑</span>{{ ba.name }}<span class="ba-cnt">{{ ba.count }}</span>
         </button>
       </nav>
+
+      <!-- 当前吧管理条：吧主可见 -->
+      <div v-if="currentBa && isMyBa(currentBa)" class="cp-manage">
+        <span class="cp-manage-hint">你是『{{ currentBa.name }}』的吧主，可置顶或删除本吧帖子</span>
+        <button class="mini-btn" type="button" @click="openEdit">编辑吧简介</button>
+      </div>
 
       <!-- 排序 + 搜索 -->
       <div class="cp-toolbar">
@@ -92,6 +119,16 @@
               <span class="tb-time">{{ formatTime(p.publishedAt || p.createdAt) }}</span>
             </div>
           </div>
+
+          <!-- 吧主管理：置顶 / 删除本吧帖子 -->
+          <div v-if="currentBa && isMyBa(currentBa)" class="tb-manage" @click.stop>
+            <button class="mini-btn" type="button" :disabled="managing" @click="togglePin(p)">
+              {{ p.pinned ? '取消置顶' : '置顶' }}
+            </button>
+            <button class="mini-btn danger" type="button" :disabled="managing" @click="removePost(p)">
+              删除
+            </button>
+          </div>
         </li>
       </ul>
 
@@ -101,19 +138,64 @@
         @go="load"
       />
     </div>
+
+    <!-- 创建 / 编辑吧 -->
+    <div v-if="dialog" class="cp-mask" @click.self="closeDialog">
+      <div class="panel cp-dialog">
+        <h3 class="cp-dialog-title grad-text">
+          {{ dialog === 'create' ? '创 建 一 个 吧' : '编 辑 吧 简 介' }}
+        </h3>
+        <input
+          v-model.trim="form.name"
+          class="cp-input"
+          type="text"
+          maxlength="20"
+          :disabled="dialog === 'edit'"
+          placeholder="吧名，2-20 个字"
+        />
+        <textarea
+          v-model.trim="form.description"
+          class="cp-input"
+          rows="3"
+          maxlength="200"
+          placeholder="一句话介绍这个吧（选填）"
+        ></textarea>
+        <p class="cp-dialog-note">
+          {{ dialog === 'create' ? '创建后你就是第一任吧主，每人最多创建 3 个吧' : '吧名创建后不可修改' }}
+        </p>
+        <p v-if="dialogError" class="cp-error">{{ dialogError }}</p>
+        <div class="cp-dialog-actions">
+          <button class="g-btn g-btn-sm" type="button" :disabled="saving" @click="submitDialog">
+            {{ saving ? '提交中…' : '确 定' }}
+          </button>
+          <button class="g-btn g-btn-sm cp-cancel" type="button" @click="closeDialog">取 消</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="toast" class="cp-toast">{{ toast }}</div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listPosts, listCategoryStats } from '../api/blog'
+import { listPosts, listCategoryStats, deletePost, setPinned } from '../api/blog'
+import { createBa, updateBa, checkinToday, doCheckin } from '../api/community'
 import TopBar from '../components/TopBar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import Pager from '../components/Pager.vue'
 import { toPlainSummary } from '../utils/richText'
 
 const router = useRouter()
+
+const me = ref(null)
+try {
+  me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
+} catch {
+  me.value = null
+}
+const logged = computed(() => !!localStorage.getItem('bn-token'))
 
 const bars = ref([])          // 吧（分类 + 帖子数）
 const posts = ref([])
@@ -200,8 +282,151 @@ function openPost(p) {
   router.push({ name: 'post', params: { slug: p.slug } })
 }
 
+/* ================= 签到 / 经验 ================= */
+const checkin = ref(null)
+const checking = ref(false)
+const toast = ref('')
+let toastTimer = null
+
+function showToast(message) {
+  toast.value = message
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = ''), 2600)
+}
+
+async function loadCheckin() {
+  if (!logged.value) return
+  try {
+    const res = await checkinToday()
+    checkin.value = res.data
+  } catch {
+    checkin.value = null
+  }
+}
+
+async function handleCheckin() {
+  if (!logged.value) {
+    showToast('登录后才能签到')
+    return
+  }
+  checking.value = true
+  try {
+    const res = await doCheckin()
+    checkin.value = res.data
+    showToast(`签到成功 +${res.data.gained} 经验，连续 ${res.data.streak} 天`)
+  } catch (e) {
+    showToast(e.message || '签到失败')
+    loadCheckin()
+  } finally {
+    checking.value = false
+  }
+}
+
+/* ================= 吧：创建 / 管理 ================= */
+const dialog = ref('')        // '' | 'create' | 'edit'
+const form = ref({ name: '', description: '' })
+const saving = ref(false)
+const dialogError = ref('')
+
+const currentBa = computed(() =>
+  bars.value.find((b) => String(b.id) === categoryId.value) || null
+)
+
+function isMyBa(ba) {
+  return !!(me.value && ba && ba.ownerId && ba.ownerId === me.value.id)
+}
+
+function openCreate() {
+  if (!logged.value) {
+    showToast('登录后才能创建吧')
+    return
+  }
+  dialogError.value = ''
+  form.value = { name: '', description: '' }
+  dialog.value = 'create'
+}
+
+function openEdit() {
+  if (!currentBa.value) return
+  dialogError.value = ''
+  form.value = {
+    name: currentBa.value.name,
+    description: currentBa.value.description || ''
+  }
+  dialog.value = 'edit'
+}
+
+function closeDialog() {
+  if (saving.value) return
+  dialog.value = ''
+  dialogError.value = ''
+}
+
+async function submitDialog() {
+  if (saving.value) return
+  const name = form.value.name.trim()
+  if (dialog.value === 'create' && !name) {
+    dialogError.value = '请输入吧名'
+    return
+  }
+  saving.value = true
+  dialogError.value = ''
+  try {
+    if (dialog.value === 'create') {
+      const res = await createBa(name, form.value.description)
+      dialog.value = ''
+      await loadBars()
+      showToast(res.message || '吧创建成功')
+      if (res.data?.id) switchBa(String(res.data.id))
+    } else {
+      const res = await updateBa(currentBa.value.id, currentBa.value.name, form.value.description)
+      dialog.value = ''
+      await loadBars()
+      showToast(res.message || '吧信息已更新')
+    }
+  } catch (e) {
+    dialogError.value = e.message || '提交失败'
+  } finally {
+    saving.value = false
+  }
+}
+
+/* ================= 吧主：置顶 / 删除本吧帖子 ================= */
+const managing = ref(false)
+
+async function togglePin(p) {
+  if (managing.value) return
+  managing.value = true
+  try {
+    await setPinned(p.id, !p.pinned)
+    await load(page.value.current)
+    showToast(p.pinned ? '已取消置顶' : '已置顶')
+  } catch (e) {
+    showToast(e.message || '操作失败')
+  } finally {
+    managing.value = false
+  }
+}
+
+async function removePost(p) {
+  if (managing.value) return
+  if (!window.confirm(`确定删除帖子「${p.title || '（无标题）'}」？该操作不可恢复。`)) return
+  managing.value = true
+  try {
+    await deletePost(p.id)
+    showToast('帖子已删除')
+    await loadBars()
+    await load(page.value.current)
+  } catch (e) {
+    showToast(e.message || '删除失败')
+  } finally {
+    managing.value = false
+  }
+}
+
 onMounted(() => {
   loadBars()
+  loadCheckin()
   load(1)
 })
 </script>
@@ -222,6 +447,139 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin: 16px 0 12px;
+}
+
+/* 社区状态条：签到 + 创建吧 */
+.cp-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 2px;
+}
+
+.cp-checkin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cp-lv { font-size: 12px; color: var(--c-ninja); letter-spacing: 0.5px; }
+.cp-exp { font-size: 12px; color: var(--c-dim); }
+.cp-streak { font-size: 12px; color: var(--c-acid); }
+.cp-checkin-btn { padding: 4px 12px; font-size: 12px; }
+.cp-create-btn { padding: 6px 14px; font-size: 12px; }
+
+/* 吧主标识 */
+.ba-chip.mine { border-color: rgba(217, 255, 77, 0.34); }
+.ba-crown { font-size: 11px; margin-right: 2px; }
+
+.cp-manage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--c-dim);
+  border-left: 3px solid rgba(217, 255, 77, 0.4);
+  border-radius: 0 8px 8px 0;
+  background: rgba(217, 255, 77, 0.06);
+}
+
+/* 帖子上的吧主操作 */
+.tb-manage {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  align-self: center;
+  margin-left: 8px;
+}
+
+.tb-manage .mini-btn {
+  padding: 4px 9px;
+  font-size: 11px;
+  color: var(--c-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tb-manage .mini-btn:hover { border-color: rgba(150, 182, 168, 0.42); }
+.tb-manage .mini-btn.danger { color: #ff9d9d; border-color: rgba(255, 157, 157, 0.3); }
+.tb-manage .mini-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 创建 / 编辑吧对话框 */
+.cp-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 7, 10, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.cp-dialog {
+  width: min(420px, 100%);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cp-dialog-title {
+  font-size: 16px;
+  letter-spacing: 2px;
+  margin-bottom: 2px;
+}
+
+.cp-input {
+  width: 100%;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: var(--c-text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.cp-input:focus { border-color: var(--c-ninja); }
+.cp-input:disabled { opacity: 0.6; }
+
+.cp-dialog-note { font-size: 11px; color: var(--c-dim); margin: 0; }
+.cp-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.cp-dialog-actions .cp-cancel { color: var(--c-dim); }
+
+.cp-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  z-index: 95;
+  padding: 9px 20px;
+  font-size: 13px;
+  color: var(--c-text);
+  background: rgba(20, 24, 30, 0.94);
+  border: 1px solid rgba(150, 182, 168, 0.4);
+  border-radius: 999px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
 }
 .ba-chip {
   display: inline-flex;

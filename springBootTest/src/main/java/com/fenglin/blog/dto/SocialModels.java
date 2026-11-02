@@ -34,7 +34,10 @@ public final class SocialModels {
             Long followingCount,
             Boolean followed,
             Boolean self,
-            Boolean mutual) {
+            Boolean mutual,
+            int exp,
+            int level,
+            String title) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

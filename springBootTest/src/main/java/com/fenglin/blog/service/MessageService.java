@@ -31,6 +31,12 @@ public class MessageService {
     /** 撤回后双方看到的提示文案 */
     public static final String RECALLED_TEXT = "消息已撤回";
 
+    /** 撤回时间窗口（分钟）：发出后超过这个时长不允许再撤回 */
+    private static final long RECALL_WINDOW_MINUTES = 3L;
+
+    /** 超时的提示文案，前后端保持一致 */
+    public static final String RECALL_TOO_LATE_TEXT = "消息只能在发出三分钟之内撤回";
+
     private final MessageMapper messageMapper;
     private final UserMapper userMapper;
 
@@ -198,6 +204,10 @@ public class MessageService {
         }
         if (isRecalled(message)) {
             return toVOs(List.of(message)).get(0);
+        }
+        if (message.getCreatedAt() == null
+                || message.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(RECALL_WINDOW_MINUTES))) {
+            throw BizException.badRequest(RECALL_TOO_LATE_TEXT);
         }
 
         Message update = new Message();

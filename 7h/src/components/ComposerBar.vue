@@ -67,7 +67,7 @@
       <div v-else class="cb-sticker-body">
         <div v-if="stickerList.length" class="cb-sticker-grid">
           <div v-for="s in stickerList" :key="s.id" class="cb-sticker">
-            <button type="button" class="cb-sticker-btn" :title="s.name" @click="insertSticker(s)">
+            <button type="button" class="cb-sticker-btn" :title="instantSticker ? `${s.name}（点击立即发送）` : s.name" @click="onStickerClick(s)">
               <img :src="s.url" :alt="s.name" />
             </button>
             <button type="button" class="cb-sticker-del" title="删除表情" @click="removeSticker(s.id)">
@@ -154,11 +154,16 @@ const props = defineProps({
   upload: { type: Boolean, default: true },
   /** 是否开启自定义表情包面板（目前只有私信页用） */
   stickers: { type: Boolean, default: false },
+  /**
+   * 表情包「立即发送」模式：点击表情包不插入输入框，
+   * 而是 emit('sticker-send', sticker) 由父组件直接发送（私信页用）。
+   */
+  instantSticker: { type: Boolean, default: false },
   /** 原生 accept 属性 */
   accept: { type: String, default: 'image/*,.pdf,.txt,.md,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx' }
 })
 
-const emit = defineEmits(['update:modelValue', 'uploaded', 'error'])
+const emit = defineEmits(['update:modelValue', 'uploaded', 'error', 'sticker-send'])
 
 const EMOJI_GROUPS = [
   {
@@ -207,6 +212,10 @@ function togglePanel(name) {
   if (panel.value === 'link') {
     linkUrl.value = ''
     linkText.value = ''
+  }
+  // 每次打开表情面板都重读 localStorage，保证刚收藏的表情包能立刻看到
+  if (panel.value === 'emoji' && props.stickers) {
+    stickerList.value = loadStickers()
   }
 }
 
@@ -271,6 +280,16 @@ function insertEmoji(emoji) {
 function insertSticker(sticker) {
   insertText(`![${sticker.name || '表情'}](${sticker.url})`)
   showTip('表情已插入')
+}
+
+/** 表情包点击：立即发送模式交给父组件直接发送，否则插入输入框 */
+function onStickerClick(sticker) {
+  if (props.instantSticker) {
+    emit('sticker-send', sticker)
+    showTip('已发送')
+  } else {
+    insertSticker(sticker)
+  }
 }
 
 function openStickerPicker() {

@@ -85,7 +85,7 @@
           </div>
 
           <template v-else>
-            <div class="ms-stream" ref="streamEl">
+            <div class="ms-stream" ref="streamEl" @dblclick="onStreamDblclick">
               <div v-if="!messages.length" class="empty-state">
                 <span class="es-ico">🫧</span>
                 <span>还没有消息，打个招呼吧</span>
@@ -113,10 +113,19 @@
                   <template v-if="m.recalled !== 1">
                     <button class="ms-quote-btn" type="button" @click="startQuote(m)">引用</button>
                     <button
+                      v-if="!isMine(m) && firstImage(m)"
+                      class="ms-quote-btn"
+                      type="button"
+                      title="收藏这个表情"
+                      @click="favoriteSticker(m)"
+                    >
+                      收藏
+                    </button>
+                    <button
                       v-if="isMine(m)"
                       class="ms-quote-btn"
                       type="button"
-                      @click="askConfirm(m, 'recall')"
+                      @click="onRecallClick(m)"
                     >
                       撤回
                     </button>
@@ -150,7 +159,9 @@
                 :target="inputEl"
                 :upload="true"
                 :stickers="true"
+                :instant-sticker="true"
                 placeholder="输入消息…"
+                @sticker-send="sendStickerNow"
               />
               <textarea
                 ref="inputEl"
@@ -178,11 +189,20 @@
         </section>
       </div>
     </div>
+
+    <!-- 图片 / 表情包 放大预览：双击气泡里的图打开，点空白或 ✕ 关闭 -->
+    <div v-if="previewSrc" class="ms-lightbox" @click.self="closePreview">
+      <button class="ms-lightbox-close" type="button" title="关闭" @click="closePreview">✕</button>
+      <img :src="previewSrc" class="ms-lightbox-img" alt="放大预览" />
+    </div>
+
+    <!-- 轻提示：收藏成功 / 撤回超时等，自动消失 -->
+    <div v-if="toast" class="ms-toast">{{ toast }}</div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import {
   listConversations,
   listMessages,
@@ -197,6 +217,7 @@ import UserAvatar from '../components/UserAvatar.vue'
 import RichText from '../components/RichText.vue'
 import ComposerBar from '../components/ComposerBar.vue'
 import { toPlainSummary } from '../utils/richText'
+import { addSticker } from '../utils/stickers'
 
 const conversations = ref([])
 const messages = ref([])
@@ -220,6 +241,28 @@ const confirmText = computed(() =>
     ? '撤回后双方都会看到「消息已撤回」，确定？'
     : '删除后仅你自己看不到，对方不受影响'
 )
+
+/* ===== 撤回：发出后三分钟以内才能撤 ===== */
+const RECALL_WINDOW_MS = 3 * 60 * 1000
+const RECALL_TOO_LATE_TEXT = '消息只能在发出三分钟之内撤回'
+
+function messageAge(m) {
+  const t = m.createdAt ? new Date(m.createdAt).getTime() : 0
+  return Number.isNaN(t) ? Infinity : Date.now() - t
+}
+
+function canRecall(m) {
+  return messageAge(m) <= RECALL_WINDOW_MS
+}
+
+/** 点「撤回」：超时直接提示，不再进入确认流程 */
+function onRecallClick(m) {
+  if (!canRecall(m)) {
+    showToast(RECALL_TOO_LATE_TEXT)
+    return
+  }
+  askConfirm(m, 'recall')
+}
 
 function askConfirm(m, kind) {
   confirming.value = confirming.value && confirming.value.id === m.id && confirming.value.kind === kind
@@ -394,7 +437,76 @@ async function send() {
   }
 }
 
-onMounted(loadConversations)
+/** 表情包「立即发送」：点一下表情包直接发出去，不经过输入框 */
+async function sendStickerNow(sticker) {
+  if (!sticker?.url || !currentPeer.value || sending.value) return
+  sending.value = true
+  error.value = ''
+  try {
+    await sendMessage(currentPeer.value, `![${sticker.name || '表情'}](${sticker.url})`, null)
+    await open(currentPeer.value)
+    await loadConversations()
+  } catch (e) {
+    error.value = e.message || '发送失败'
+  } finally {
+    sending.value = false
+  }
+}
+
+/* ===== 表情包收藏 ===== */
+
+/** 取消息里第一张 Markdown 图片：{ name, url }，没有则 null */
+function firstImage(content) {
+  const match = /!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/.exec(content || '')
+  if (!match) return null
+  return { name: match[1] || '表情', url: match[2] }
+}
+
+/** 收藏对方发来的表情包：加入个人表情包列表（localStorage），下次可直接发送 */
+function favoriteSticker(m) {
+  const img = firstImage(m.content)
+  if (!img) return
+  const outcome = addSticker(img.name, img.url)
+  showToast(outcome.ok ? `已收藏「${img.name}」` : outcome.message)
+}
+
+/* ===== 轻提示 ===== */
+const toast = ref('')
+let toastTimer = null
+
+function showToast(message) {
+  toast.value = message
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = ''), 2400)
+}
+
+/* ===== 图片 / 表情包 双击放大预览 ===== */
+const previewSrc = ref('')
+
+function onStreamDblclick(event) {
+  const img = event.target
+  if (img && img.tagName === 'IMG' && img.src) {
+    previewSrc.value = img.src
+  }
+}
+
+function closePreview() {
+  previewSrc.value = ''
+}
+
+function onKeydown(event) {
+  if (event.key === 'Escape') closePreview()
+}
+
+onMounted(() => {
+  loadConversations()
+  document.addEventListener('keydown', onKeydown)
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(toastTimer)
+  document.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <style scoped>
@@ -635,5 +747,71 @@ onMounted(loadConversations)
 @media (max-width: 760px) {
   .ms-layout { flex-direction: column; }
   .ms-side { width: 100%; max-height: 180px; }
+}
+
+/* ===== 图片 / 表情包 放大预览层 ===== */
+.ms-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 7, 10, 0.86);
+  backdrop-filter: blur(6px);
+  animation: ms-fade 0.18s ease;
+}
+
+@keyframes ms-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ms-lightbox-img {
+  max-width: 90vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+}
+
+.ms-lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--c-text);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.ms-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* ===== 轻提示（收藏成功 / 撤回超时等） ===== */
+.ms-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  z-index: 95;
+  padding: 9px 20px;
+  font-size: 13px;
+  color: var(--c-text);
+  background: rgba(20, 24, 30, 0.94);
+  border: 1px solid rgba(150, 182, 168, 0.4);
+  border-radius: 999px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: ms-fade 0.18s ease;
 }
 </style>

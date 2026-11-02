@@ -22,6 +22,8 @@ public class User {
     private String faction;
     private String role;
     private Integer status;
+    /** 经验值：签到 / 发文章 / 发评论累加，用于计算等级与称号 */
+    private Integer exp;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String resetTokenHash;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
@@ -49,6 +51,8 @@ public class User {
     public void setRole(String role) { this.role = role; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+    public Integer getExp() { return exp; }
+    public void setExp(Integer exp) { this.exp = exp; }
     public String getResetTokenHash() { return resetTokenHash; }
     public void setResetTokenHash(String resetTokenHash) { this.resetTokenHash = resetTokenHash; }
     public LocalDateTime getResetTokenExpire() { return resetTokenExpire; }

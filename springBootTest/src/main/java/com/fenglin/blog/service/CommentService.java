@@ -35,13 +35,16 @@ public class CommentService {
     private final PostMapper postMapper;
     private final UserMapper userMapper;
     private final NotificationService notificationService;
+    private final LevelService levelService;
 
     public CommentService(CommentMapper commentMapper, PostMapper postMapper,
-                          UserMapper userMapper, NotificationService notificationService) {
+                          UserMapper userMapper, NotificationService notificationService,
+                          LevelService levelService) {
         this.commentMapper = commentMapper;
         this.postMapper = postMapper;
         this.userMapper = userMapper;
         this.notificationService = notificationService;
+        this.levelService = levelService;
     }
 
     public List<CommentVO> list(Long postId) {
@@ -120,6 +123,9 @@ public class CommentService {
         }
         notificationService.notify(post.getAuthorId(), current.userId(),
                 NotificationService.TYPE_COMMENT, postId, comment.getId(), preview);
+
+        // 评论计入经验（含楼中楼回复）
+        levelService.addExp(current.userId(), LevelService.EXP_COMMENT);
 
         User author = userMapper.selectById(current.userId());
         return new CommentVO(

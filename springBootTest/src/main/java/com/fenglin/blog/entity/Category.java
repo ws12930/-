@@ -16,6 +16,8 @@ public class Category {
     private String description;
     private Integer sortOrder;
     private Integer status;
+    /** 吧主用户 id：用户创建的吧自动成为吧主，系统内置分类可能为空 */
+    private Long ownerId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -31,6 +33,8 @@ public class Category {
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+    public Long getOwnerId() { return ownerId; }
+    public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

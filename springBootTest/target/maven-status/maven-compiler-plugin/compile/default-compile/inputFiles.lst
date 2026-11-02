@@ -6,6 +6,8 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\config\MybatisPlusC
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\config\WebConfig.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\AdminController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\AuthController.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\BaController.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\CheckinController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\CommentController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\NotificationController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\PostController.java
@@ -15,9 +17,11 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\UploadCo
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\AdminModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\AuthModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\BlogModels.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\CommunityModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\SocialModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\AccessToken.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Category.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Checkin.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Comment.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Follow.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Message.java
@@ -30,6 +34,7 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\User.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\handler\GlobalExceptionHandler.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\AccessTokenMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\CategoryMapper.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\CheckinMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\CommentMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\FollowMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\MessageMapper.java
@@ -46,8 +51,11 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\security\RequireAdm
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\security\RequireAuth.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\security\TokenHash.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\AdminService.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\BaService.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\CheckinService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\CommentService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\FollowService.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\LevelService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\LikeService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\MessageService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\NotificationService.java

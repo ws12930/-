@@ -63,6 +63,9 @@ public final class AuthModels {
             String role,
             LocalDateTime createdAt,
             String token,
-            LocalDateTime tokenExpiresAt) {
+            LocalDateTime tokenExpiresAt,
+            int exp,
+            int level,
+            String title) {
     }
 }

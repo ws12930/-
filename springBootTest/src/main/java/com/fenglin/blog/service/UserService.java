@@ -47,15 +47,17 @@ public class UserService {
     private final FollowMapper followMapper;
     private final PostMapper postMapper;
     private final PasswordEncoder passwordEncoder;
+    private final LevelService levelService;
 
     public UserService(UserMapper userMapper, AccessTokenMapper accessTokenMapper,
                        FollowMapper followMapper, PostMapper postMapper,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder, LevelService levelService) {
         this.userMapper = userMapper;
         this.accessTokenMapper = accessTokenMapper;
         this.followMapper = followMapper;
         this.postMapper = postMapper;
         this.passwordEncoder = passwordEncoder;
+        this.levelService = levelService;
     }
 
     /* ================= 注册 / 登录 ================= */
@@ -292,10 +294,14 @@ public class UserService {
                 followingCount,
                 followed,
                 self,
-                mutual);
+                mutual,
+                levelService.expOf(user),
+                levelService.levelOf(levelService.expOf(user)),
+                levelService.titleOf(levelService.expOf(user)));
     }
 
     private UserVO toVO(User user, TokenPair tokenPair) {
+        int exp = levelService.expOf(user);
         return new UserVO(
                 user.getId(),
                 user.getUsername(),
@@ -307,7 +313,10 @@ public class UserService {
                 user.getRole(),
                 user.getCreatedAt(),
                 tokenPair == null ? null : tokenPair.token(),
-                tokenPair == null ? null : tokenPair.expireAt());
+                tokenPair == null ? null : tokenPair.expireAt(),
+                exp,
+                levelService.levelOf(exp),
+                levelService.titleOf(exp));
     }
 
     private long countByUsername(String username) {

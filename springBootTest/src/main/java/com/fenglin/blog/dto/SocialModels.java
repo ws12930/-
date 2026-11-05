@@ -37,7 +37,9 @@ public final class SocialModels {
             Boolean mutual,
             int exp,
             int level,
-            String title) {
+            String title,
+            /** 账号已被管理员封禁（status != 1）；前台据此显示灰态、隐藏关注与举报入口 */
+            Boolean banned) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

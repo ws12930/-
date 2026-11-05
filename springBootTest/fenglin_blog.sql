@@ -393,4 +393,25 @@ CREATE TABLE `blog_user`  (
 INSERT INTO `blog_user` VALUES (1, 'qinghe', '$2a$10$grTvthiFX81jmF3M.8VjXeD2rIAhULIzO9pHleDfBGveDgEYKHOqO', '青禾', 'qinghe@fenglin.blog', '/uploads/2026/10/1f62d6c82f0444cd8486e93e42fc82df.png', '', 'ninja', 'ADMIN', 1, NULL, NULL, '2026-10-21 16:08:12', '2026-11-02 09:52:01', 5);
 INSERT INTO `blog_user` VALUES (2, 'jingling', '$2a$10$YgoogTThK3yCawTa8B50/eOAZDjrVLI8Tm8aJ.IBrFGdQ.rxmflsC', '景翎', 'jingling@fenglin.blog', 'ninja:0', '', 'ninja', 'ADMIN', 1, NULL, NULL, '2026-10-21 16:08:12', '2026-11-02 09:51:34', 0);
 
+-- ----------------------------
+-- 举报表（补建：原 dump 里没有，举报功能需要）
+-- ----------------------------
+DROP TABLE IF EXISTS `blog_report`;
+CREATE TABLE `blog_report` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `target_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '举报对象类型：POST / COMMENT',
+  `target_id` bigint NOT NULL COMMENT '举报对象 id',
+  `reporter_id` bigint NOT NULL COMMENT '举报人 user_id',
+  `reason` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '理由：广告垃圾 / 辱骂攻击 / 违法违规 / 其他',
+  `target_snapshot` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '举报时的内容快照（标题或评论摘要）',
+  `detail` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '补充说明',
+  `status` tinyint NOT NULL DEFAULT 0 COMMENT '0 待处理 / 1 已处理（内容已删） / 2 已驳回',
+  `handler_id` bigint NULL DEFAULT NULL COMMENT '处理人 user_id',
+  `handled_at` datetime NULL DEFAULT NULL COMMENT '处理时间',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_report_once`(`target_type` ASC, `target_id` ASC, `reporter_id` ASC) USING BTREE,
+  INDEX `idx_report_status`(`status` ASC, `id` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '举报' ROW_FORMAT = DYNAMIC;
+
 SET FOREIGN_KEY_CHECKS = 1;

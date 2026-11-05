@@ -165,7 +165,9 @@ async function handleRegister() {
       username: form.username,
       nickname: form.nickname || form.username,
       email: form.email,
-      password: form.password
+      password: form.password,
+      // 后端 RegisterRequest 要求 confirmPassword 非空，并会自行比对两次密码
+      confirmPassword: form.confirm
     })
     alert.type = 'ok'
     alert.text = '注册成功，正在跳转到登录页…'

@@ -297,7 +297,8 @@ public class UserService {
                 mutual,
                 levelService.expOf(user),
                 levelService.levelOf(levelService.expOf(user)),
-                levelService.titleOf(levelService.expOf(user)));
+                levelService.titleOf(levelService.expOf(user)),
+                user.getStatus() != null && user.getStatus() != 1);
     }
 
     private UserVO toVO(User user, TokenPair tokenPair) {

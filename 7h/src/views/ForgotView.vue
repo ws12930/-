@@ -144,7 +144,12 @@ async function handleReset() {
   loading.value = true
   alert.text = ''
   try {
-    await resetPassword({ token: token.value, password: form.password })
+    // 后端 ResetPasswordRequest 字段为 newPassword / confirmPassword
+    await resetPassword({
+      token: token.value,
+      newPassword: form.password,
+      confirmPassword: form.confirm
+    })
     alert.type = 'ok'
     alert.text = '密码已重置，正在跳转到登录页…'
     showToast('重置成功')

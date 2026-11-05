@@ -17,6 +17,15 @@
             <button class="mini-btn" :class="{ on: post.liked }" type="button" @click="like">
               {{ post.liked ? '♥' : '♡' }} {{ post.likeCount || 0 }}
             </button>
+            <button
+              v-if="logged && !isMyPost"
+              class="mini-btn"
+              type="button"
+              title="举报这篇文章"
+              @click="openReport('POST', post.id, post.title)"
+            >
+              举报
+            </button>
           </div>
         </header>
 
@@ -96,6 +105,15 @@
                   回复
                 </button>
                 <button
+                  v-if="logged && !isMyComment(c)"
+                  class="mini-btn"
+                  type="button"
+                  title="举报这条评论"
+                  @click="openReport('COMMENT', c.id, authorName(c) + '：' + plain(c.content, 24))"
+                >
+                  举报
+                </button>
+                <button
                   v-if="canDelete(c)"
                   class="mini-btn danger"
                   :class="{ on: pendingDelete === c.id }"
@@ -138,6 +156,15 @@
                         回复
                       </button>
                       <button
+                        v-if="logged && !isMyComment(r)"
+                        class="mini-btn"
+                        type="button"
+                        title="举报这条评论"
+                        @click="openReport('COMMENT', r.id, authorName(r) + '：' + plain(r.content, 24))"
+                      >
+                        举报
+                      </button>
+                      <button
                         v-if="canDelete(r)"
                         class="mini-btn danger"
                         :class="{ on: pendingDelete === r.id }"
@@ -168,6 +195,16 @@
         </div>
       </section>
     </div>
+
+    <!-- 举报弹窗 -->
+    <ReportDialog
+      v-if="reportTarget"
+      :target="reportTarget"
+      @close="reportTarget = null"
+      @done="onReportDone"
+    />
+
+    <div v-if="toast" class="pv-toast">{{ toast }}</div>
   </div>
 </template>
 
@@ -182,6 +219,7 @@ import BackButton from '../components/BackButton.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import RichText from '../components/RichText.vue'
 import ComposerBar from '../components/ComposerBar.vue'
+import ReportDialog from '../components/ReportDialog.vue'
 import { withPostAuthor, withCommentAuthors, readMe, isLogged } from '../utils/author'
 import { toPlainSummary } from '../utils/richText'
 
@@ -358,6 +396,43 @@ async function focusComment() {
 function goLogin() {
   router.push({ name: 'login', query: { redirect: route.fullPath } })
 }
+
+/* ================= 举报 ================= */
+
+const reportTarget = ref(null)   // { type, id, label }，非空即弹窗打开
+const toast = ref('')
+let toastTimer = null
+
+const isMyPost = computed(() => !!me.value && !!post.value && post.value.authorId === me.value.id)
+
+function isMyComment(c) {
+  return !!me.value && c?.author?.id === me.value.id
+}
+
+function plain(text, max) {
+  return toPlainSummary(text, max)
+}
+
+function openReport(type, id, label) {
+  if (!logged.value) {
+    goLogin()
+    return
+  }
+  reportTarget.value = { type, id, label }
+}
+
+function showToast(message) {
+  toast.value = message
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = ''), 2600)
+}
+
+function onReportDone() {
+  reportTarget.value = null
+  showToast('举报已提交，管理员会尽快处理')
+}
+
+onBeforeUnmount(() => clearTimeout(toastTimer))
 
 async function like() {
   if (!post.value) return
@@ -579,4 +654,17 @@ onBeforeUnmount(() => clearTimeout(highlightTimer))
   box-shadow: inset 0 0 0 1px rgba(150, 182, 168, 0.32);
 }
 .cm-reply.mark { font-size: 11px; color: var(--c-dim); }
+
+.pv-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 42px;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  font-size: 12.5px;
+  border-radius: 999px;
+  background: rgba(20, 24, 22, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  z-index: 90;
+}
 </style>

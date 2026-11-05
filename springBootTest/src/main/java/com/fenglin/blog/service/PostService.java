@@ -46,6 +46,8 @@ public class PostService {
     /** 草稿：唯一被特殊对待的状态（对外不可见）。其余状态一律对外可见。 */
     private static final String DRAFT = "DRAFT";
     private static final String PUBLISHED = "PUBLISHED";
+    /** 标签名长度上限，与 blog_tag.name varchar(50) 对齐 */
+    private static final int TAG_NAME_MAX = 50;
 
     private final PostMapper postMapper;
     private final CategoryMapper categoryMapper;
@@ -244,7 +246,7 @@ public class PostService {
         post.setUpdatedAt(now);
         postMapper.insert(post);
 
-        replaceTags(post.getId(), request.tagIds());
+        replaceTags(post.getId(), request.tagIds(), request.tags());
         // 发布（非草稿）才计入经验，草稿不重复刷经验
         if (!DRAFT.equalsIgnoreCase(status)) {
             levelService.addExp(authorId, LevelService.EXP_POST);
@@ -279,7 +281,7 @@ public class PostService {
         post.setUpdatedAt(now);
         postMapper.updateById(post);
 
-        replaceTags(post.getId(), request.tagIds());
+        replaceTags(post.getId(), request.tagIds(), request.tags());
         // 草稿转为发布时补发一次经验
         if (wasDraft && !DRAFT.equalsIgnoreCase(status)) {
             levelService.addExp(post.getAuthorId(), LevelService.EXP_POST);
@@ -376,9 +378,10 @@ public class PostService {
                 tagsOf(post.getId()));
     }
 
-    private List<TagVO> tagsOf(Long postId) {
+    private List<String> tagsOf(Long postId) {
         List<PostTag> relations = postTagMapper.selectList(
-                new LambdaQueryWrapper<PostTag>().eq(PostTag::getPostId, postId));
+                new LambdaQueryWrapper<PostTag>().eq(PostTag::getPostId, postId)
+                        .orderByAsc(PostTag::getId));
         if (relations.isEmpty()) {
             return Collections.emptyList();
         }
@@ -386,32 +389,99 @@ public class PostService {
         for (PostTag relation : relations) {
             tagIds.add(relation.getTagId());
         }
-        List<Tag> tags = tagMapper.selectBatchIds(tagIds);
-        List<TagVO> list = new ArrayList<>(tags.size());
-        for (Tag tag : tags) {
-            list.add(new TagVO(tag.getId(), tag.getName(), tag.getSlug()));
+        Map<Long, String> nameById = new HashMap<>();
+        for (Tag tag : tagMapper.selectBatchIds(tagIds)) {
+            nameById.put(tag.getId(), tag.getName());
         }
-        return list;
+        List<String> names = new ArrayList<>(relations.size());
+        for (PostTag relation : relations) {
+            String name = nameById.get(relation.getTagId());
+            if (name != null) {
+                names.add(name);
+            }
+        }
+        return names;
     }
 
-    /** 全量替换文章标签，先清后插 */
-    private void replaceTags(Long postId, List<Long> tagIds) {
-        postTagMapper.delete(new LambdaQueryWrapper<PostTag>().eq(PostTag::getPostId, postId));
-        if (tagIds == null || tagIds.isEmpty()) {
+    /**
+     * 全量替换文章标签，先清后插。
+     * 两个入参都为 null 时视为"这次请求没管标签"，直接返回，避免把已有标签抹掉；
+     * 传空数组则按"用户清空了标签"处理。
+     */
+    private void replaceTags(Long postId, List<Long> tagIds, List<String> tagNames) {
+        if (tagIds == null && tagNames == null) {
             return;
         }
-        Set<Long> unique = new HashSet<>(tagIds);
+        Set<Long> unique = new HashSet<>();
+        if (tagIds != null) {
+            for (Long tagId : tagIds) {
+                if (tagId != null && tagMapper.selectById(tagId) != null) {
+                    unique.add(tagId);
+                }
+            }
+        }
+        unique.addAll(resolveTagIds(tagNames));
+
+        postTagMapper.delete(new LambdaQueryWrapper<PostTag>().eq(PostTag::getPostId, postId));
+        if (unique.isEmpty()) {
+            return;
+        }
         LocalDateTime now = LocalDateTime.now();
         for (Long tagId : unique) {
-            if (tagId == null || tagMapper.selectById(tagId) == null) {
-                continue;
-            }
             PostTag relation = new PostTag();
             relation.setPostId(postId);
             relation.setTagId(tagId);
             relation.setCreatedAt(now);
             postTagMapper.insert(relation);
         }
+    }
+
+    /** 标签名 → 标签 id：先按名查找（忽略首尾空格），库里没有就顺手建一个 */
+    private List<Long> resolveTagIds(List<String> tagNames) {
+        List<Long> ids = new ArrayList<>();
+        if (tagNames == null || tagNames.isEmpty()) {
+            return ids;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (String raw : tagNames) {
+            if (raw == null) {
+                continue;
+            }
+            String name = raw.trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            if (name.length() > TAG_NAME_MAX) {
+                name = name.substring(0, TAG_NAME_MAX);
+            }
+            Tag tag = tagMapper.selectOne(new LambdaQueryWrapper<Tag>()
+                    .eq(Tag::getName, name)
+                    .last("limit 1"));
+            if (tag == null) {
+                tag = new Tag();
+                tag.setName(name);
+                tag.setSlug(uniqueTagSlug(name));
+                tag.setCreatedAt(now);
+                tagMapper.insert(tag);
+            }
+            ids.add(tag.getId());
+        }
+        return ids;
+    }
+
+    /** 标签 slug 全局唯一；中文等无法转写的名字退化成时间戳形式 */
+    private String uniqueTagSlug(String name) {
+        String raw = slugify(name);
+        if (raw.isEmpty()) {
+            raw = "tag-" + System.currentTimeMillis();
+        }
+        String base = raw.length() > 60 ? raw.substring(0, 60) : raw;
+        String candidate = base;
+        int suffix = 2;
+        while (tagMapper.selectCount(new LambdaQueryWrapper<Tag>().eq(Tag::getSlug, candidate)) > 0) {
+            candidate = base + "-" + suffix++;
+        }
+        return candidate;
     }
 
     private List<Long> postIdsOfTag(Long tagId) {

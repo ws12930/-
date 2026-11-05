@@ -19,7 +19,7 @@ import java.util.List;
  * 站内通知。
  *
  * <p>类型：{@code LIKE} 点赞文章、{@code COMMENT} 评论文章、
- * {@code REPLY} 回复评论、{@code FOLLOW} 关注我。
+ * {@code REPLY} 回复评论、{@code FOLLOW} 关注我、{@code REPORT} 举报处理结果。
  */
 @Service
 public class NotificationService {
@@ -28,6 +28,7 @@ public class NotificationService {
     public static final String TYPE_COMMENT = "COMMENT";
     public static final String TYPE_REPLY = "REPLY";
     public static final String TYPE_FOLLOW = "FOLLOW";
+    public static final String TYPE_REPORT = "REPORT";
 
     private static final long DEFAULT_LIMIT = 100L;
 

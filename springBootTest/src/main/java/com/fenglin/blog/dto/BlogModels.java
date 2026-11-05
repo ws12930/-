@@ -26,7 +26,10 @@ public final class BlogModels {
             @Size(max = 16, message = "状态不能超过 16 个字符") String status,
             /** 是否置顶：true/1 置顶，其余视为不置顶 */
             Boolean pinned,
-            List<Long> tagIds) {
+            /** 标签 id 列表（旧写法，保留兼容） */
+            List<Long> tagIds,
+            /** 标签名列表：编辑器发的是名字，后端按名找已有标签，没有就新建 */
+            List<String> tags) {
     }
 
     /** 置顶切换请求 */
@@ -70,7 +73,8 @@ public final class BlogModels {
             LocalDateTime publishedAt,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
-            List<TagVO> tags) {
+            /** 标签名列表：前端首页、详情页、编辑器都直接按字符串渲染 */
+            List<String> tags) {
     }
 
     public record CommentVO(

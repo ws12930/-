@@ -6,18 +6,20 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\config\MybatisPlusC
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\config\WebConfig.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\AdminController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\AuthController.java
-D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\BaController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\CheckinController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\CommentController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\NotificationController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\PostController.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\ReportController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\SocialController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\TaxonomyController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\controller\UploadController.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\AdminModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\AuthModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\BlogModels.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\CheckinModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\CommunityModels.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\ReportModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\dto\SocialModels.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\AccessToken.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Category.java
@@ -29,6 +31,7 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Notification
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Post.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\PostLike.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\PostTag.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Report.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\Tag.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\entity\User.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\handler\GlobalExceptionHandler.java
@@ -42,6 +45,7 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\Notification
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\PostLikeMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\PostMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\PostTagMapper.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\ReportMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\TagMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\mapper\UserMapper.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\security\AuthInterceptor.java
@@ -51,7 +55,6 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\security\RequireAdm
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\security\RequireAuth.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\security\TokenHash.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\AdminService.java
-D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\BaService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\CheckinService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\CommentService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\FollowService.java
@@ -60,5 +63,6 @@ D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\LikeService
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\MessageService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\NotificationService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\PostService.java
+D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\ReportService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\TaxonomyService.java
 D:\workSpace\-\springBootTest\src\main\java\com\fenglin\blog\service\UserService.java

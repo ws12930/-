@@ -6,7 +6,7 @@
     <div class="pg-shell mid">
       <header class="pg-head">
         <h1 class="pg-title grad-text">通 知</h1>
-        <p class="pg-sub grad-text">评论、点赞与关注提醒</p>
+        <p class="pg-sub grad-text">评论、点赞、关注与举报处理提醒</p>
       </header>
 
       <p v-if="error" class="nt-error">{{ error }}</p>
@@ -37,7 +37,8 @@
               <b>{{ actorName(n) }}</b>
               {{ textOf(n.type) }}
             </p>
-            <p v-if="n.postTitle" class="nt-target">《{{ n.postTitle }}》</p>
+            <p v-if="typeOf(n.type) === 'report' && n.content" class="nt-target">{{ n.content }}</p>
+            <p v-else-if="n.postTitle" class="nt-target">《{{ n.postTitle }}》</p>
             <span class="nt-time">{{ formatTime(n.createdAt) }}</span>
           </div>
           <span v-if="!n.read" class="nt-dot"></span>
@@ -75,7 +76,8 @@ const TYPE_TEXT = {
   reply: '回复了你的评论',
   like: '赞了你的文章',
   follow: '关注了你',
-  message: '给你发了私信'
+  message: '给你发了私信',
+  report: '处理了你的举报'
 }
 
 const TYPE_ICON = {
@@ -83,7 +85,8 @@ const TYPE_ICON = {
   reply: '↩️',
   like: '♥',
   follow: '＋',
-  message: '✉️'
+  message: '✉️',
+  report: '🛡️'
 }
 
 /** 后端返回的是大写类型（COMMENT / REPLY / LIKE / FOLLOW），这里统一成小写再查表 */

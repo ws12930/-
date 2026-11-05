@@ -20,6 +20,9 @@
               <span>粉丝 {{ profile.followerCount ?? 0 }}</span>
               <span>关注 {{ profile.followingCount ?? 0 }}</span>
             </div>
+            <p v-if="profile.banned" class="uv-banned-note">
+              该账号因违规已被封禁，暂不能关注或互动
+            </p>
           </div>
           <div v-if="!isSelf && !profile.banned" class="uv-actions">
             <button
@@ -35,7 +38,6 @@
               举报
             </button>
           </div>
-          <p v-else-if="profile.banned" class="uv-banned-note">该账号因违规已被封禁</p>
         </div>
       </section>
 
@@ -211,7 +213,7 @@ onMounted(load)
   border: 1px solid rgba(255, 138, 138, 0.42);
   border-radius: 999px;
 }
-.uv-banned-note { max-width: 180px; font-size: 11.5px; line-height: 1.6; color: #ff8a8a; text-align: right; }
+.uv-banned-note { margin-top: 9px; font-size: 11.5px; line-height: 1.6; color: #ff8a8a; }
 
 /* 举报：低饱和描边，鼠标移上去才变暖，避免抢关注的视觉权重 */
 .uv-report {

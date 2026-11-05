@@ -11,7 +11,7 @@
  Target Server Version : 80039 (8.0.39)
  File Encoding         : 65001
 
- Date: 02/11/2026 09:53:20
+ Date: 05/11/2026 15:11:33
 */
 
 SET NAMES utf8mb4;
@@ -31,7 +31,7 @@ CREATE TABLE `blog_access_token`  (
   UNIQUE INDEX `uk_blog_access_token_hash`(`token_hash` ASC) USING BTREE,
   INDEX `idx_blog_access_token_user`(`user_id` ASC) USING BTREE,
   INDEX `idx_blog_access_token_expire`(`expire_at` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 64 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '访问令牌' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 113 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '访问令牌' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_access_token
@@ -88,6 +88,36 @@ INSERT INTO `blog_access_token` VALUES (60, 2, '9c709f2ef0dabb13ef79c81c5e05944b
 INSERT INTO `blog_access_token` VALUES (61, 1, '70c916fcf6e227f168bc802a0040b714ccba13fefb60aad316ec4b0334d95a89', '2026-11-09 09:51:15', '2026-11-02 09:51:15');
 INSERT INTO `blog_access_token` VALUES (62, 2, '74d25495c6bb413894e20ffd3cacc3120061c087e7c05c9a2f9f80d08ad26feb', '2026-11-09 09:51:22', '2026-11-02 09:51:22');
 INSERT INTO `blog_access_token` VALUES (63, 1, 'f10fbba95c5f7c1cdaddc70c24731029e86366037238381f041f698defe80a04', '2026-11-09 09:51:22', '2026-11-02 09:51:22');
+INSERT INTO `blog_access_token` VALUES (64, 2, '435d6ac61630320b8693eb9d4c3b8d0a5dd467cd756973643b9c6bec062700f8', '2026-11-12 13:58:45', '2026-11-05 13:58:45');
+INSERT INTO `blog_access_token` VALUES (65, 1, '3436bda64274a1e5c4d7d208ddb020e0445ef6fbea0122f5dc9ed65f8d8dbe2d', '2026-11-12 14:02:05', '2026-11-05 14:02:05');
+INSERT INTO `blog_access_token` VALUES (66, 1, '929300bcff24ed42968e8e85f6f655b298b330686b3442e61c889f9004e37aeb', '2026-11-12 14:03:31', '2026-11-05 14:03:31');
+INSERT INTO `blog_access_token` VALUES (67, 1, 'db3a5930d7d41f59495ab79c6c50a03fa0669c6b3eb77f0a838f9d6696510923', '2026-11-12 14:03:38', '2026-11-05 14:03:38');
+INSERT INTO `blog_access_token` VALUES (68, 2, '2538140b4e05582fb56d92e243f75e3e27edbf09577a4b012ef21f98e014b20f', '2026-11-12 14:04:56', '2026-11-05 14:04:56');
+INSERT INTO `blog_access_token` VALUES (69, 2, '2c95a2d459408039021037dae72affdd391a254466630f2e897347efc1c2e43e', '2026-11-12 14:06:26', '2026-11-05 14:06:26');
+INSERT INTO `blog_access_token` VALUES (70, 1, '88d0bf2a04c4973b5e510069456429efd2a6c97608c00f4d7e333d006bceb898', '2026-11-12 14:08:30', '2026-11-05 14:08:30');
+INSERT INTO `blog_access_token` VALUES (73, 4, '1e36bffd282b920fa49b50ab79dc73d632d23f742b0bafcfa06a5336f0922448', '2026-11-12 14:16:59', '2026-11-05 14:16:59');
+INSERT INTO `blog_access_token` VALUES (74, 4, '350e84b06cf4c7707e85d71286f07eb0f336b2d5711f58c9d1a6f16b17544970', '2026-12-05 14:17:01', '2026-11-05 14:17:01');
+INSERT INTO `blog_access_token` VALUES (75, 1, 'e28f4c88d78ef97b3e5d8aa80fc75bbba4fbe60f0866cfec81407d8701dd1cb5', '2026-12-05 14:24:22', '2026-11-05 14:24:22');
+INSERT INTO `blog_access_token` VALUES (76, 1, '57656f681164a4d139dde60eec382db4cfe6c58d66e3b9573dfd9bf819c6a0bb', '2026-11-12 14:27:19', '2026-11-05 14:27:19');
+INSERT INTO `blog_access_token` VALUES (77, 1, 'b6cf280bce79772699b0d17f33d387abe0c263aa739a1db27c440528478609b7', '2026-11-12 14:28:05', '2026-11-05 14:28:05');
+INSERT INTO `blog_access_token` VALUES (78, 1, '2c25402fb391446e55c86a25694d0918e2719f92f8969b833fb41c47372daf8a', '2026-11-12 14:28:37', '2026-11-05 14:28:37');
+INSERT INTO `blog_access_token` VALUES (79, 1, 'b7c19dfcbf68f0b2bb03f6f947c44b1e6a259b91c4b85fd2162a18d21f7bfefa', '2026-11-12 14:33:09', '2026-11-05 14:33:09');
+INSERT INTO `blog_access_token` VALUES (80, 2, 'b72cb075b491c8f6ac2ef91ee0491c2cc1e2ff7c66de2e9e0a87a8f74c00d89c', '2026-11-12 14:33:28', '2026-11-05 14:33:28');
+INSERT INTO `blog_access_token` VALUES (82, 1, 'a89e33e25ab97006bc5fbe1e01da2ecc467e8bbaf13b2c17cdca2d4af0fe7e8a', '2026-11-12 14:33:56', '2026-11-05 14:33:56');
+INSERT INTO `blog_access_token` VALUES (83, 1, '7d28d2151f50d757f03e4d6836fb0d59973f75af753a2a05498ef9343766254b', '2026-11-12 14:38:09', '2026-11-05 14:38:09');
+INSERT INTO `blog_access_token` VALUES (84, 1, 'ba6f792aa9c76e2dba910a3bb59debe7f623d01e78595ac05b5c69a5ebdbe6f7', '2026-11-12 14:38:39', '2026-11-05 14:38:39');
+INSERT INTO `blog_access_token` VALUES (85, 1, '0805f6496e4e88392ffa7439ad5415232c4fd30526e4d0593218b7d69aa81169', '2026-11-12 14:39:19', '2026-11-05 14:39:19');
+INSERT INTO `blog_access_token` VALUES (86, 1, '864fe8babab0b6cb4119c521ef3f21afb2503165e13044a614f5c196190565e4', '2026-11-12 14:47:10', '2026-11-05 14:47:10');
+INSERT INTO `blog_access_token` VALUES (87, 2, '34a62f5b76aad8e6624d3b4fad9196cb6864a6dcb657551483846cf4780ce460', '2026-11-12 14:47:10', '2026-11-05 14:47:10');
+INSERT INTO `blog_access_token` VALUES (88, 2, 'a60ad19465473dc97e0cef1d112b033239dadca7b5acebc31f2a52a23ab6a8ec', '2026-11-12 14:48:07', '2026-11-05 14:48:07');
+INSERT INTO `blog_access_token` VALUES (89, 1, '1bd73f88f7a23df804525cb34093a789150ecacd67d875d2e40d3f1d8ec1d727', '2026-11-12 14:52:34', '2026-11-05 14:52:34');
+INSERT INTO `blog_access_token` VALUES (90, 2, 'e6219cf549b72563e763d539322f0627056fb0c44a63a47eba5a0b66d6936b10', '2026-11-12 14:52:34', '2026-11-05 14:52:34');
+INSERT INTO `blog_access_token` VALUES (91, 2, 'b69f5632ab8ff4d2677c75137b3cdc45fd997d461c3ba629d1fd252e3882b39e', '2026-11-12 14:52:58', '2026-11-05 14:52:58');
+INSERT INTO `blog_access_token` VALUES (92, 2, '79ae42461a954abe47363b7fdeb16758943669a839442cb1e0f5b0b067b9bcbc', '2026-12-05 14:54:24', '2026-11-05 14:54:24');
+INSERT INTO `blog_access_token` VALUES (93, 1, 'a098aae5d7c7201a3fce63de67f68bdecbb934324f46c06d739fada2a66b9c43', '2026-12-05 14:55:16', '2026-11-05 14:55:16');
+INSERT INTO `blog_access_token` VALUES (110, 2, '8f58a4a7b0d2495a8b90e0c9b3587c30964d92953ecc31ee1501b8c99b3b20e8', '2026-11-12 15:09:53', '2026-11-05 15:09:53');
+INSERT INTO `blog_access_token` VALUES (111, 2, '3af2b5e2b0cc98b8eb0b805537a831569c64d2f6c5c28159808eac3f811566aa', '2026-11-12 15:10:04', '2026-11-05 15:10:04');
+INSERT INTO `blog_access_token` VALUES (112, 2, 'f97a1ca4c8f0e84b66bb818e14d98f4bef1e16599971d29a4df235420496889a', '2026-11-12 15:10:35', '2026-11-05 15:10:35');
 
 -- ----------------------------
 -- Table structure for blog_category
@@ -105,7 +135,7 @@ CREATE TABLE `blog_category`  (
   `owner_id` bigint NULL DEFAULT NULL COMMENT '吧主用户 id',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_blog_category_slug`(`slug` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章分类' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 13 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章分类' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_category
@@ -115,6 +145,7 @@ INSERT INTO `blog_category` VALUES (2, '生活随笔', 'life-notes', '日常片�
 INSERT INTO `blog_category` VALUES (3, '读书观影', 'reviews', '读过看过的内容与一点感想', 3, 1, '2026-10-21 15:56:54', '2026-10-21 16:45:35', NULL);
 INSERT INTO `blog_category` VALUES (4, '闲聊讨论', 'chat', '没什么主题的开放讨论', 4, 1, '2026-10-21 15:56:54', '2026-10-21 16:45:35', NULL);
 INSERT INTO `blog_category` VALUES (6, '三角洲吧', 'ba-1793584350601', '前面忘了，后面也忘了', 5, 1, '2026-11-02 09:52:31', '2026-11-02 09:52:31', 1);
+INSERT INTO `blog_category` VALUES (11, '乐子吧', 'ba-1793859467781', '里面有很多乐子', 6, 1, '2026-11-05 14:17:47', '2026-11-05 14:17:47', 4);
 
 -- ----------------------------
 -- Table structure for blog_checkin
@@ -130,12 +161,15 @@ CREATE TABLE `blog_checkin`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_checkin_user_date`(`user_id` ASC, `checkin_date` ASC) USING BTREE,
   INDEX `idx_checkin_user`(`user_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '每日签到' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '每日签到' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_checkin
 -- ----------------------------
 INSERT INTO `blog_checkin` VALUES (2, 1, '2026-11-02', 1, 5, '2026-11-02 09:52:01');
+INSERT INTO `blog_checkin` VALUES (6, 4, '2026-11-05', 1, 5, '2026-11-05 14:17:52');
+INSERT INTO `blog_checkin` VALUES (7, 1, '2026-11-05', 1, 5, '2026-11-05 14:39:00');
+INSERT INTO `blog_checkin` VALUES (8, 2, '2026-11-05', 1, 5, '2026-11-05 14:55:05');
 
 -- ----------------------------
 -- Table structure for blog_comment
@@ -154,7 +188,7 @@ CREATE TABLE `blog_comment`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_blog_comment_post`(`post_id` ASC, `created_at` ASC) USING BTREE,
   INDEX `idx_blog_comment_parent`(`parent_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '评论' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '评论' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_comment
@@ -167,6 +201,9 @@ INSERT INTO `blog_comment` VALUES (5, 6, 1, NULL, '删除测试-父', 'NORMAL', 
 INSERT INTO `blog_comment` VALUES (6, 6, 1, 5, '删除测试-子', 'NORMAL', '2026-10-26 09:15:39', '2026-10-26 09:15:39', 1);
 INSERT INTO `blog_comment` VALUES (7, 6, 1, NULL, '测试楼层：贴吧式盖楼效果验证', 'NORMAL', '2026-10-30 15:06:31', '2026-10-30 15:08:24', 1);
 INSERT INTO `blog_comment` VALUES (8, 6, 2, NULL, '作者本人来冒个泡，验证楼主标识~', 'NORMAL', '2026-10-30 15:07:31', '2026-10-30 15:08:24', 1);
+INSERT INTO `blog_comment` VALUES (9, 7, 1, NULL, '测试', 'NORMAL', '2026-11-05 14:04:23', '2026-11-05 14:04:23', 0);
+INSERT INTO `blog_comment` VALUES (10, 7, 2, 9, '收到', 'NORMAL', '2026-11-05 14:04:38', '2026-11-05 14:04:38', 0);
+INSERT INTO `blog_comment` VALUES (11, 10, 2, NULL, '虎爸跑道🤣', 'NORMAL', '2026-11-05 14:27:35', '2026-11-05 14:27:35', 0);
 
 -- ----------------------------
 -- Table structure for blog_follow
@@ -207,7 +244,7 @@ CREATE TABLE `blog_message`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_blog_message_conversation`(`sender_id` ASC, `receiver_id` ASC, `created_at` ASC) USING BTREE,
   INDEX `idx_blog_message_unread`(`receiver_id` ASC, `read_flag` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 17 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '私信' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 18 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '私信' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_message
@@ -224,7 +261,8 @@ INSERT INTO `blog_message` VALUES (10, 2, 1, '', 1, 0, 1, NULL, 1, '2026-10-26 0
 INSERT INTO `blog_message` VALUES (11, 1, 2, '啊呀。', 1, 0, 0, NULL, 0, '2026-10-26 09:40:16');
 INSERT INTO `blog_message` VALUES (12, 1, 2, '', 1, 0, 0, NULL, 1, '2026-11-02 09:06:43');
 INSERT INTO `blog_message` VALUES (13, 1, 2, '', 1, 0, 0, NULL, 1, '2026-11-02 09:08:32');
-INSERT INTO `blog_message` VALUES (16, 1, 2, '![a08b87d6277f9e2fcd69f6eaa1ef5834ba99f3e1.webp](/uploads/2026/11/92a2166cc98042569c84b77d1f94919b.webp)', 0, 0, 0, NULL, 0, '2026-11-02 09:34:56');
+INSERT INTO `blog_message` VALUES (16, 1, 2, '![a08b87d6277f9e2fcd69f6eaa1ef5834ba99f3e1.webp](/uploads/2026/11/92a2166cc98042569c84b77d1f94919b.webp)', 1, 0, 0, NULL, 0, '2026-11-02 09:34:56');
+INSERT INTO `blog_message` VALUES (17, 2, 1, '?', 1, 0, 0, 16, 0, '2026-11-05 13:59:13');
 
 -- ----------------------------
 -- Table structure for blog_notification
@@ -243,7 +281,7 @@ CREATE TABLE `blog_notification`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_blog_notification_user`(`user_id` ASC, `read_flag` ASC, `created_at` ASC) USING BTREE,
   INDEX `idx_blog_notification_actor`(`actor_id` ASC, `type` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '站内通知' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 26 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '站内通知' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_notification
@@ -257,7 +295,10 @@ INSERT INTO `blog_notification` VALUES (10, 2, 1, 'REPLY', 6, 4, '你只是怕�
 INSERT INTO `blog_notification` VALUES (11, 2, 1, 'COMMENT', 6, 4, '你只是怕了', 1, '2026-10-26 09:13:01');
 INSERT INTO `blog_notification` VALUES (12, 2, 1, 'COMMENT', 6, 5, '删除测试-父', 1, '2026-10-26 09:15:38');
 INSERT INTO `blog_notification` VALUES (13, 2, 1, 'COMMENT', 6, 6, '删除测试-子', 1, '2026-10-26 09:15:39');
-INSERT INTO `blog_notification` VALUES (14, 2, 1, 'COMMENT', 6, 7, '测试楼层：贴吧式盖楼效果验证', 0, '2026-10-30 15:06:31');
+INSERT INTO `blog_notification` VALUES (14, 2, 1, 'COMMENT', 6, 7, '测试楼层：贴吧式盖楼效果验证', 1, '2026-10-30 15:06:31');
+INSERT INTO `blog_notification` VALUES (15, 1, 2, 'REPLY', 7, 10, '收到', 1, '2026-11-05 14:04:38');
+INSERT INTO `blog_notification` VALUES (16, 1, 2, 'COMMENT', 7, 10, '收到', 1, '2026-11-05 14:04:38');
+INSERT INTO `blog_notification` VALUES (17, 4, 2, 'COMMENT', 10, 11, '虎爸跑道🤣', 0, '2026-11-05 14:27:35');
 
 -- ----------------------------
 -- Table structure for blog_post
@@ -286,7 +327,7 @@ CREATE TABLE `blog_post`  (
   INDEX `idx_blog_post_author`(`author_id` ASC) USING BTREE,
   INDEX `idx_blog_post_status_pinned`(`status` ASC, `pinned` ASC, `published_at` ASC) USING BTREE,
   INDEX `idx_blog_post_category`(`category_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 16 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_post
@@ -296,8 +337,10 @@ INSERT INTO `blog_post` VALUES (2, 1, 1, '草稿测试', 'post-1792649405126', '
 INSERT INTO `blog_post` VALUES (3, 1, 1, 'A-草稿', 'a', '', '正文', '', 'DRAFT', 0, 0, 0, NULL, NULL, '2026-10-22 14:20:39', '2026-10-22 14:20:54', 1);
 INSERT INTO `blog_post` VALUES (4, 1, 1, 'B-已发布', 'b', '', '正文', '', 'PUBLISHED', 0, 0, 0, NULL, '2026-10-22 14:20:40', '2026-10-22 14:20:40', '2026-10-22 14:20:54', 1);
 INSERT INTO `blog_post` VALUES (5, 1, 1, 'C-自定义', 'c', '', '正文', '', '置顶推荐', 0, 0, 0, NULL, '2026-10-22 14:20:40', '2026-10-22 14:20:40', '2026-10-22 14:20:54', 1);
-INSERT INTO `blog_post` VALUES (6, 2, 2, '这里是67广场', '67', '', '你必须吃掉这些东西\n![修改自称.png](/uploads/2026/10/0ab38a18396f44ad81a26cea1ba84973.png)\n', '', 'PUBLISHED', 28, 2, 0, NULL, '2026-10-22 14:25:44', '2026-10-22 14:25:44', '2026-11-02 09:00:39', 0);
-INSERT INTO `blog_post` VALUES (7, 1, 3, '进站以来第一个文章', 'post-1792976383340', '', 'hello！我是青禾\n![mascot-welcome-BE0nkIi0.png](/uploads/2026/10/1d8f6dfc7fa74e54ab9f1f0356ed31e9.png)\n', '', 'PUBLISHED', 9, 1, 0, NULL, '2026-10-26 08:59:43', '2026-10-26 08:59:43', '2026-11-02 09:01:14', 0);
+INSERT INTO `blog_post` VALUES (6, 2, 2, '这里是67广场', '67', '', '你必须吃掉这些东西\n![修改自称.png](/uploads/2026/10/0ab38a18396f44ad81a26cea1ba84973.png)\n', '', 'PUBLISHED', 34, 2, 0, NULL, '2026-10-22 14:25:44', '2026-10-22 14:25:44', '2026-11-05 14:54:34', 0);
+INSERT INTO `blog_post` VALUES (7, 1, 3, '进站以来第一个文章', 'post-1792976383340', '', 'hello！我是青禾\n![mascot-welcome-BE0nkIi0.png](/uploads/2026/10/1d8f6dfc7fa74e54ab9f1f0356ed31e9.png)\n', '', 'PUBLISHED', 21, 1, 0, NULL, '2026-10-26 08:59:43', '2026-10-26 08:59:43', '2026-11-05 14:54:06', 0);
+INSERT INTO `blog_post` VALUES (9, 4, 11, '最近发现的乐子', 'post-1793859633690', '三角洲大坝鼠鼠美美得吃', 'https://img1.baidu.com/it/u=3967363019,3946371088&fm=253&fmt=auto&app=120&f=JPEG?w=889&h=500', '', 'PUBLISHED', 1, 0, 0, NULL, '2026-11-05 14:20:34', '2026-11-05 14:20:34', '2026-11-05 14:20:49', 1);
+INSERT INTO `blog_post` VALUES (10, 4, 11, '最近发现的乐子', 'post-1793859817675', '三角洲大坝鼠鼠美美得吃', '![70a0a8086db5b5fada26e32eac890050.jpeg](/uploads/2026/11/056ec2182d044801810aa23a0014b77a.jpeg)', '', 'PUBLISHED', 12, 0, 0, NULL, '2026-11-05 14:23:38', '2026-11-05 14:23:38', '2026-11-05 15:02:33', 0);
 
 -- ----------------------------
 -- Table structure for blog_post_like
@@ -332,10 +375,35 @@ CREATE TABLE `blog_post_tag`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_blog_post_tag`(`post_id` ASC, `tag_id` ASC) USING BTREE,
   INDEX `idx_blog_post_tag_tag`(`tag_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章标签关联' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 11 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章标签关联' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_post_tag
+-- ----------------------------
+
+-- ----------------------------
+-- Table structure for blog_report
+-- ----------------------------
+DROP TABLE IF EXISTS `blog_report`;
+CREATE TABLE `blog_report`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `target_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '涓炬姤瀵硅薄绫诲瀷锛歅OST / COMMENT',
+  `target_id` bigint NOT NULL COMMENT '涓炬姤瀵硅薄 id',
+  `reporter_id` bigint NOT NULL COMMENT '涓炬姤浜?user_id',
+  `reason` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '鐞嗙敱锛氬箍鍛婂瀮鍦?/ 杈遍獋鏀诲嚮 / 杩濇硶杩濊? / 鍏朵粬',
+  `target_snapshot` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '举报时的内容快照（标题或评论摘要）',
+  `detail` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '琛ュ厖璇存槑',
+  `status` tinyint NOT NULL DEFAULT 0 COMMENT '0 寰呭?鐞?/ 1 宸插?鐞嗭紙鍐呭?宸插垹锛?/ 2 宸查┏鍥',
+  `handler_id` bigint NULL DEFAULT NULL COMMENT '澶勭悊浜?user_id',
+  `handled_at` datetime NULL DEFAULT NULL COMMENT '澶勭悊鏃堕棿',
+  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_report_once`(`target_type` ASC, `target_id` ASC, `reporter_id` ASC) USING BTREE,
+  INDEX `idx_report_status`(`status` ASC, `id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '涓炬姤' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- Records of blog_report
 -- ----------------------------
 
 -- ----------------------------
@@ -349,7 +417,7 @@ CREATE TABLE `blog_tag`  (
   `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_blog_tag_slug`(`slug` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章标签' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文章标签' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_tag
@@ -385,33 +453,13 @@ CREATE TABLE `blog_user`  (
   UNIQUE INDEX `uk_blog_user_username`(`username` ASC) USING BTREE,
   UNIQUE INDEX `uk_blog_user_email`(`email` ASC) USING BTREE,
   INDEX `idx_blog_user_reset_token`(`reset_token_hash` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 14 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of blog_user
 -- ----------------------------
-INSERT INTO `blog_user` VALUES (1, 'qinghe', '$2a$10$grTvthiFX81jmF3M.8VjXeD2rIAhULIzO9pHleDfBGveDgEYKHOqO', '青禾', 'qinghe@fenglin.blog', '/uploads/2026/10/1f62d6c82f0444cd8486e93e42fc82df.png', '', 'ninja', 'ADMIN', 1, NULL, NULL, '2026-10-21 16:08:12', '2026-11-02 09:52:01', 5);
-INSERT INTO `blog_user` VALUES (2, 'jingling', '$2a$10$YgoogTThK3yCawTa8B50/eOAZDjrVLI8Tm8aJ.IBrFGdQ.rxmflsC', '景翎', 'jingling@fenglin.blog', 'ninja:0', '', 'ninja', 'ADMIN', 1, NULL, NULL, '2026-10-21 16:08:12', '2026-11-02 09:51:34', 0);
-
--- ----------------------------
--- 举报表（补建：原 dump 里没有，举报功能需要）
--- ----------------------------
-DROP TABLE IF EXISTS `blog_report`;
-CREATE TABLE `blog_report` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `target_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '举报对象类型：POST / COMMENT',
-  `target_id` bigint NOT NULL COMMENT '举报对象 id',
-  `reporter_id` bigint NOT NULL COMMENT '举报人 user_id',
-  `reason` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '理由：广告垃圾 / 辱骂攻击 / 违法违规 / 其他',
-  `target_snapshot` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '举报时的内容快照（标题或评论摘要）',
-  `detail` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '补充说明',
-  `status` tinyint NOT NULL DEFAULT 0 COMMENT '0 待处理 / 1 已处理（内容已删） / 2 已驳回',
-  `handler_id` bigint NULL DEFAULT NULL COMMENT '处理人 user_id',
-  `handled_at` datetime NULL DEFAULT NULL COMMENT '处理时间',
-  `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_report_once`(`target_type` ASC, `target_id` ASC, `reporter_id` ASC) USING BTREE,
-  INDEX `idx_report_status`(`status` ASC, `id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '举报' ROW_FORMAT = DYNAMIC;
+INSERT INTO `blog_user` VALUES (1, 'qinghe', '$2a$10$grTvthiFX81jmF3M.8VjXeD2rIAhULIzO9pHleDfBGveDgEYKHOqO', '青禾', 'qinghe@fenglin.blog', '/uploads/2026/10/1f62d6c82f0444cd8486e93e42fc82df.png', '7h博客看板娘呀~', 'ninja', 'ADMIN', 1, NULL, NULL, '2026-10-21 16:08:12', '2026-11-05 14:39:24', 10);
+INSERT INTO `blog_user` VALUES (2, 'jingling', '$2a$10$YgoogTThK3yCawTa8B50/eOAZDjrVLI8Tm8aJ.IBrFGdQ.rxmflsC', '景翎', 'jingling@fenglin.blog', 'ninja:0', '', 'ninja', 'ADMIN', 1, NULL, NULL, '2026-10-21 16:08:12', '2026-11-05 14:55:05', 10);
+INSERT INTO `blog_user` VALUES (4, 'dhd', '$2a$10$W8TMknkWBqYaVF1.VKqZsuQuJBtrKK5nIsE975V/OSgKXjW1gRxDS', '老达', 'taika_@qq.com', 'ninja:0', '', 'ninja', 'USER', 1, NULL, NULL, '2026-11-05 14:16:59', '2026-11-05 14:23:37', 45);
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -50,6 +50,8 @@
         <button class="g-btn g-btn-sm" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
       </div>
     </div>
+
+    <ConfirmDialog :state="confirmState" @confirm="confirm" @close="close" />
   </div>
 </template>
 
@@ -59,6 +61,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { listPosts, listMyPosts, deletePost, setPinned } from '../api/blog'
 import PageNav from '../components/PageNav.vue'
 import BackButton from '../components/BackButton.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useConfirm } from '../composables/useConfirm'
 import { toPlainSummary } from '../utils/richText'
 
 const router = useRouter()
@@ -69,6 +73,7 @@ const rows = ref([])
 const scope = ref('all')
 const loading = ref(false)
 const error = ref('')
+const { state: confirmState, ask: askConfirm, confirm, close } = useConfirm()
 const page = ref(1)
 const size = 10
 const total = ref(0)
@@ -141,14 +146,22 @@ function goEditor() {
   router.push({ name: 'editor' })
 }
 
-async function remove(p) {
-  if (!window.confirm(`确定删除《${p.title}》？`)) return
-  try {
-    await deletePost(p.id)
-    await load()
-  } catch (e) {
-    error.value = e.message || '删除失败'
-  }
+function remove(p) {
+  askConfirm({
+    title: '删 除 文 章',
+    message: `确定删除《${p.title || '无标题'}》吗？`,
+    detail: '删除后无法恢复，评论也会一并下架。',
+    confirmText: '删 除',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await deletePost(p.id)
+        await load()
+      } catch (e) {
+        error.value = e.message || '删除失败'
+      }
+    }
+  })
 }
 
 async function togglePin(p) {

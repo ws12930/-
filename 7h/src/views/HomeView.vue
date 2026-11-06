@@ -82,6 +82,8 @@
         <button class="g-btn g-btn-sm" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
       </div>
     </div>
+
+    <ConfirmDialog :state="confirmState" @confirm="confirm" @close="close" />
   </div>
 </template>
 
@@ -93,6 +95,8 @@ import { toggleLike } from '../api/social'
 import TopBar from '../components/TopBar.vue'
 import BannerCarousel from '../components/BannerCarousel.vue'
 import UserAvatar from '../components/UserAvatar.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useConfirm } from '../composables/useConfirm'
 import { pauseBg, resumeBg } from '../utils/bgState'
 import { toPlainSummary } from '../utils/richText'
 import { withPostAuthors } from '../utils/author'
@@ -113,6 +117,7 @@ const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 
 const me = ref(null)
+const { state: confirmState, ask: askConfirm, confirm, close } = useConfirm()
 try {
   me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
 } catch {
@@ -197,14 +202,22 @@ async function like(p) {
   }
 }
 
-async function remove(p) {
-  if (!window.confirm(`确定删除《${p.title}》？`)) return
-  try {
-    await deletePost(p.id)
-    await load()
-  } catch (e) {
-    error.value = e.message || '删除失败'
-  }
+function remove(p) {
+  askConfirm({
+    title: '删 除 文 章',
+    message: `确定删除《${p.title || '无标题'}》吗？`,
+    detail: '删除后无法恢复，评论也会一并下架。',
+    confirmText: '删 除',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await deletePost(p.id)
+        await load()
+      } catch (e) {
+        error.value = e.message || '删除失败'
+      }
+    }
+  })
 }
 
 onMounted(() => {

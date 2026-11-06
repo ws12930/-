@@ -349,7 +349,9 @@ public class PostService {
         Category category = post.getCategoryId() == null
                 ? null : categoryMapper.selectById(post.getCategoryId());
         long commentCount = commentMapper.selectCount(new LambdaQueryWrapper<Comment>()
-                .eq(Comment::getPostId, post.getId()));
+                .eq(Comment::getPostId, post.getId())
+                .and(w -> w.isNull(Comment::getStatus)
+                        .or().ne(Comment::getStatus, CommentService.STATUS_HIDDEN)));
         long likeCount = postLikeMapper.selectCount(new LambdaQueryWrapper<PostLike>()
                 .eq(PostLike::getPostId, post.getId()));
         return new PostVO(

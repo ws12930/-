@@ -83,7 +83,7 @@
           <button type="button" class="cb-ok" :disabled="stickerUploading" @click="openStickerPicker">
             {{ stickerUploading ? '上传中…' : '+ 添加表情' }}
           </button>
-          <span class="cb-pop-note">图片不超过 5MB，存本机</span>
+          <span class="cb-pop-note">图片不超过 5MB，存进你的账号</span>
         </div>
         <p v-if="stickerError" class="cb-pop-note err">{{ stickerError }}</p>
       </div>
@@ -141,7 +141,7 @@
 <script setup>
 import { ref, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { uploadFile } from '../api/upload'
-import { loadStickers, addSticker, removeSticker as dropSticker } from '../utils/stickers'
+import { loadStickers, addSticker, removeSticker as dropSticker, syncStickers } from '../utils/stickers'
 
 const props = defineProps({
   /** 目标输入框的 ref 对象（input / textarea） */
@@ -213,9 +213,11 @@ function togglePanel(name) {
     linkUrl.value = ''
     linkText.value = ''
   }
-  // 每次打开表情面板都重读 localStorage，保证刚收藏的表情包能立刻看到
+  // 每次打开表情面板都重读一次，保证刚收藏的表情包能立刻看到；
+  // 登录状态下再跟账号同步一次，别的设备加的也能刷出来
   if (panel.value === 'emoji' && props.stickers) {
     stickerList.value = loadStickers()
+    syncStickers().then((list) => (stickerList.value = list))
   }
 }
 
@@ -317,7 +319,7 @@ async function onStickerFile(event) {
   try {
     const result = await uploadFile(file)
     if (!result.image) throw new Error('该文件不是图片')
-    const outcome = addSticker(result.name || '表情', result.url)
+    const outcome = await addSticker(result.name || '表情', result.url)
     stickerList.value = outcome.list
     if (!outcome.ok) stickerError.value = outcome.message
   } catch (e) {
@@ -327,8 +329,8 @@ async function onStickerFile(event) {
   }
 }
 
-function removeSticker(id) {
-  stickerList.value = dropSticker(id)
+async function removeSticker(id) {
+  stickerList.value = await dropSticker(id)
   showTip('表情已删除')
 }
 
@@ -391,6 +393,10 @@ function onDocumentClick() {
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
+  // 挂载时就和账号对一次账：本地独有的表情自动导入账号，换设备也能带走
+  if (props.stickers) {
+    syncStickers().then((list) => (stickerList.value = list))
+  }
 })
 
 onBeforeUnmount(() => {

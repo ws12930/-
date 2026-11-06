@@ -462,11 +462,11 @@ function firstImage(content) {
   return { name: match[1] || '表情', url: match[2] }
 }
 
-/** 收藏对方发来的表情包：加入个人表情包列表（localStorage），下次可直接发送 */
-function favoriteSticker(m) {
+/** 收藏对方发来的表情包：加入个人表情包（存账号，与自动同步的表情列表共用一份） */
+async function favoriteSticker(m) {
   const img = firstImage(m.content)
   if (!img) return
-  const outcome = addSticker(img.name, img.url)
+  const outcome = await addSticker(img.name, img.url)
   showToast(outcome.ok ? `已收藏「${img.name}」` : outcome.message)
 }
 

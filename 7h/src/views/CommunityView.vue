@@ -174,6 +174,8 @@
     </div>
 
     <div v-if="toast" class="cp-toast">{{ toast }}</div>
+
+    <ConfirmDialog :state="confirmState" @confirm="confirm" @close="close" />
   </div>
 </template>
 
@@ -185,6 +187,8 @@ import { createBa, updateBa, checkinToday, doCheckin } from '../api/community'
 import TopBar from '../components/TopBar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import Pager from '../components/Pager.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useConfirm } from '../composables/useConfirm'
 import { toPlainSummary } from '../utils/richText'
 
 const router = useRouter()
@@ -393,6 +397,7 @@ async function submitDialog() {
 
 /* ================= 吧主：置顶 / 删除本吧帖子 ================= */
 const managing = ref(false)
+const { state: confirmState, ask: askConfirm, confirm, close } = useConfirm()
 
 async function togglePin(p) {
   if (managing.value) return
@@ -408,20 +413,28 @@ async function togglePin(p) {
   }
 }
 
-async function removePost(p) {
+function removePost(p) {
   if (managing.value) return
-  if (!window.confirm(`确定删除帖子「${p.title || '（无标题）'}」？该操作不可恢复。`)) return
-  managing.value = true
-  try {
-    await deletePost(p.id)
-    showToast('帖子已删除')
-    await loadBars()
-    await load(page.value.current)
-  } catch (e) {
-    showToast(e.message || '删除失败')
-  } finally {
-    managing.value = false
-  }
+  askConfirm({
+    title: '删 除 帖 子',
+    message: `确定删除「${p.title || '（无标题）'}」吗？`,
+    detail: '该操作不可恢复，帖子下的回复会一并消失。',
+    confirmText: '删 除',
+    danger: true,
+    onConfirm: async () => {
+      managing.value = true
+      try {
+        await deletePost(p.id)
+        showToast('帖子已删除')
+        await loadBars()
+        await load(page.value.current)
+      } catch (e) {
+        showToast(e.message || '删除失败')
+      } finally {
+        managing.value = false
+      }
+    }
+  })
 }
 
 onMounted(() => {
@@ -433,7 +446,9 @@ onMounted(() => {
 
 <style scoped>
 .community-page {
-  min-height: 100vh;
+  /* 与全站一致：自己当滚动容器，否则 html/body 的 overflow:hidden 会把超长内容裁掉 */
+  height: 100%;
+  overflow-y: auto;
   padding: 96px 16px 48px;
   box-sizing: border-box;
 }

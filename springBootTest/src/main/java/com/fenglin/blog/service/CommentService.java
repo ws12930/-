@@ -47,9 +47,13 @@ public class CommentService {
         this.levelService = levelService;
     }
 
+    /** 被管理员隐藏的评论状态值；隐藏后前台不展示，但数据保留可恢复 */
+    public static final String STATUS_HIDDEN = "HIDDEN";
+
     public List<CommentVO> list(Long postId) {
         List<Comment> comments = commentMapper.selectList(new LambdaQueryWrapper<Comment>()
                 .eq(Comment::getPostId, postId)
+                .and(w -> w.isNull(Comment::getStatus).or().ne(Comment::getStatus, STATUS_HIDDEN))
                 .orderByAsc(Comment::getCreatedAt)
                 .orderByAsc(Comment::getId));
 

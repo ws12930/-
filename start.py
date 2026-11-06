@@ -29,6 +29,35 @@ BACKEND_PORT = 8081
 DB_PASSWORD = "123456"
 PROXY_PREFIXES = ("/api/", "/uploads/")
 
+# 上传文件的持久化目录：放在项目仓库之外。
+# 原因：uploads 若留在仓库工作区内，一旦重新 clone / git clean / 换目录，
+# 未提交的图片会全部消失（头像、私信图片、文章配图全都遭殃）。
+UPLOAD_DATA_DIR = r"C:\Users\user\blog-data\uploads"
+REPO_UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
+
+
+def migrate_uploads():
+    """把仓库内 uploads 目录里的旧文件搬运到持久化目录（只补缺失，不覆盖、不删除）。
+
+    这样即使后端曾被直接以仓库内 uploads 启动过，新文件也会在下次启动时归位。
+    """
+    if not os.path.isdir(REPO_UPLOAD_DIR):
+        return
+    moved = 0
+    for root, _dirs, files in os.walk(REPO_UPLOAD_DIR):
+        for name in files:
+            src = os.path.join(root, name)
+            rel = os.path.relpath(src, REPO_UPLOAD_DIR)
+            dst = os.path.join(UPLOAD_DATA_DIR, rel)
+            if os.path.isfile(dst):
+                continue
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(src, "rb") as fin, open(dst, "wb") as fout:
+                fout.write(fin.read())
+            moved += 1
+    if moved:
+        log("已把 %d 个仓库内上传文件归档到 %s" % (moved, UPLOAD_DATA_DIR))
+
 
 def log(msg):
     print("[%s] %s" % (time.strftime("%H:%M:%S"), msg), flush=True)
@@ -152,8 +181,11 @@ def start_backend():
         return None
 
     log("启动后端 Spring Boot (端口 %d)，首次启动需要几十秒..." % BACKEND_PORT)
+    os.makedirs(UPLOAD_DATA_DIR, exist_ok=True)
+    migrate_uploads()
     env = dict(os.environ)
     env["BLOG_DB_PASSWORD"] = DB_PASSWORD
+    env["BLOG_UPLOAD_DIR"] = UPLOAD_DATA_DIR
     env.pop("SERVER__PORT", None)  # 避免被宽松绑定抢走 server.port
     creation = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
     proc = subprocess.Popen(
@@ -205,6 +237,7 @@ def main():
     print("  账号：jingling  密码：jingling123    （景翎）")
     print("-" * 56)
     print("  后端日志在独立窗口，关闭该窗口即可停止后端")
+    print("  上传文件持久化目录：%s" % UPLOAD_DATA_DIR)
     print("  按 Ctrl+C 结束本脚本\n")
 
     try:

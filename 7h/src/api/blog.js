@@ -1,7 +1,9 @@
 /**
- * 博客接口封装（Spring Boot: http://localhost:8081/api）
- * 开发期由 vite 代理 /api -> 8081，生产部署时改为同源即可。
+ * 博客接口封装（Spring Boot: http://192.168.68.77:8081/api）
+ * 开发期由 vite 代理 /api -> 8081，生产由 start.py 反代，页面只用相对路径。
  */
+import { handleBanned, isBanned } from '../utils/session'
+
 const BASE = '/api'
 
 export function getToken() {
@@ -34,6 +36,9 @@ async function request(path, { method = 'GET', body } = {}) {
   } catch (e) {
     throw new Error('后端返回内容无法解析')
   }
+
+  // 账号被封禁（40301）：清登录态并弹窗
+  if (isBanned(data)) handleBanned(data.message)
 
   // 后端统一返回体：{ code:0 成功 | 非0 业务失败, message, data }
   if (!res.ok || data.code !== 0) {

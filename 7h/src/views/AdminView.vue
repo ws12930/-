@@ -611,11 +611,13 @@ onMounted(() => {
 
 <style scoped>
 /* height:100% + overflow-y:auto：全站 html/body/#app 都是 overflow:hidden，
-   页面必须自己成为滚动容器，否则内容一长就被裁掉（以前这里写 min-height:100vh 就没有滚动条）。 */
+   页面必须自己成为滚动容器，否则内容一长就被裁掉（以前这里写 min-height:100vh 就没有滚动条）。
+   底部留白交给 .pg-shell 统一处理，避免两处叠加算出双倍空白。 */
 .admin-page {
   height: 100%;
   overflow-y: auto;
-  padding-bottom: 60px;
+  padding-bottom: 0;
+  scroll-behavior: smooth;
 }
 
 /* 细滚动条，和暗色主题贴合 */
@@ -632,14 +634,20 @@ onMounted(() => {
   background: rgba(143, 208, 174, 0.38);
 }
 
+/* 全站 .pg-shell 顶部那 74px 是给固定顶栏（60px）让位的，
+   这里原先被覆写成 padding:0 18px，顶部留白被清零，标题正好被压在顶栏下面。
+   现在显式还回顶部让位，并把底部留白收到一处统一管理。 */
 .pg-shell {
-  max-width: 880px;
+  width: 100%;
+  max-width: 900px;
+  height: auto;
+  min-height: 100%;
   margin: 0 auto;
-  padding: 0 18px;
+  padding: 80px 22px 48px;
 }
 
 .pg-head {
-  margin: 18px 0 14px;
+  margin: 0 0 18px;
 }
 
 .pg-title {
@@ -649,10 +657,9 @@ onMounted(() => {
 }
 
 .pg-sub {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   font-size: 12px;
-  color: var(--c-dim);
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 .ad-tabs {
@@ -908,5 +915,27 @@ onMounted(() => {
   color: var(--c-text);
   font-size: 13px;
   z-index: 80;
+}
+
+/* 窄屏：顶栏会换行变高，留白同步收一点；行内操作按钮换到下一行右侧，
+   否则标题和按钮会挤在同一行互相压字。 */
+@media (max-width: 700px) {
+  .pg-shell {
+    padding: 72px 14px 40px;
+  }
+  .pg-title {
+    font-size: 20px;
+    letter-spacing: 4px;
+  }
+  .ad-toolbar .ad-input {
+    flex-basis: 100%;
+  }
+  .ad-row {
+    flex-wrap: wrap;
+  }
+  .ad-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 </style>

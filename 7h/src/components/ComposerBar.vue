@@ -278,9 +278,13 @@ function insertEmoji(emoji) {
   showTip(`已插入 ${emoji}`)
 }
 
-/** 表情包以 Markdown 图片插入，RichText 会渲染成小图 */
+/**
+ * 插入模式（写文章的正文）用普通 Markdown 图片，不加 {sticker} 标记：
+ * 正文里的表情/插图按普通图片排版更自然，也不会在编辑框里露出样式语法。
+ * 评论、私信走「选中即发送」，由父组件拼带上 {sticker} 的内容。
+ */
 function insertSticker(sticker) {
-  insertText(`![${sticker.name || '表情'}](${sticker.url})`)
+  insertText(blockSnippet(`![${sticker.name || '表情'}](${sticker.url})`))
   showTip('表情已插入')
 }
 

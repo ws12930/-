@@ -2,6 +2,8 @@
  * 消息通知接口封装：别人评论/回复/点赞/关注我的提醒
  * 开发期由 vite 代理 /api -> 8081
  */
+import { handleBanned, isBanned } from '../utils/session'
+
 const BASE = '/api'
 
 function getToken() {
@@ -34,6 +36,9 @@ async function request(path, { method = 'GET', body } = {}) {
   } catch (e) {
     throw new Error('后端返回内容无法解析')
   }
+
+  // 账号被封禁（40301）：清登录态并弹窗
+  if (isBanned(data)) handleBanned(data.message)
 
   if (!res.ok || data.code !== 0) {
     throw new Error(data.message || '请求失败，请稍后重试')

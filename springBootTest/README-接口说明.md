@@ -41,7 +41,12 @@ mysql -u root -p < src/main/resources/db/schema.sql
 mvnw.cmd spring-boot:run
 ```
 
-健康检查：`GET http://localhost:8081/api/auth/ping`
+健康检查：`GET http://192.168.68.77:8081/api/auth/ping`（本机也可用 `127.0.0.1`）
+
+> 服务默认监听 `0.0.0.0:8081`，同网段的手机 / 其它电脑可以直接访问；
+> 端口与监听地址分别可用 `BLOG_SERVER_PORT`、`BLOG_SERVER_ADDRESS` 覆盖。
+> 前端不要写死 IP：页面统一用相对路径 `/api`，由 `start.py`（生产）或 vite（开发）反代，
+> 换 IP 只需改反代目标，`npm run build` 的产物不用重打。
 
 ## 统一返回体
 

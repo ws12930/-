@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
  * <ul>
  *   <li>令牌有效 —— 写入 {@link CurrentUserHolder}，公开接口也能返回个性化字段；</li>
  *   <li>令牌无效或缺失 —— 按游客继续，不阻断请求；</li>
+ *   <li>令牌有效但账号被封禁 —— 直接抛 40301，前端据此自动登出并弹窗；</li>
  *   <li>仅当目标方法标注了 {@link RequireAuth} 且当前是游客时，才抛 401。</li>
  * </ul>
  */
@@ -91,8 +92,13 @@ public class AuthInterceptor implements HandlerInterceptor {
             return null;
         }
         User user = userMapper.selectById(record.getUserId());
-        if (user == null || user.getStatus() == null || user.getStatus() != 1) {
+        if (user == null) {
             return null;
+        }
+        // 令牌本身没过期，是账号被封禁：不能按游客处理（否则前端只会看到「请先登录」），
+        // 抛 40301 让前端自动登出并弹窗「该账号已被封禁。请联系管理员。」
+        if (user.getStatus() == null || user.getStatus() != 1) {
+            throw BizException.banned(BizException.BANNED_MESSAGE);
         }
         return new CurrentUser(user.getId(), user.getUsername(), user.getRole());
     }

@@ -1,6 +1,8 @@
 /**
  * 管理后台接口封装（仅 ADMIN 可用，后端由 @RequireAdmin 把关）
  */
+import { handleBanned, isBanned } from '../utils/session'
+
 const BASE = '/api'
 
 export function getToken() {
@@ -33,6 +35,9 @@ async function request(path, { method = 'GET', body } = {}) {
   } catch (e) {
     throw new Error('后端返回内容无法解析')
   }
+
+  // 账号被封禁（40301）：清登录态并弹窗
+  if (isBanned(data)) handleBanned(data.message)
 
   if (!res.ok || data.code !== 0) {
     throw new Error(data.message || '请求失败，请稍后重试')

@@ -61,6 +61,33 @@ const html = computed(() => renderRichText(props.content || props.text))
   margin: 4px 0;
 }
 
+/* 表情包：固定缩略图，三档场景一个尺寸。
+   贴图原图动辄 1300px，之前走普通图片规则，评论里会被放大到 420px、
+   气泡里 220px，看着像贴了一张海报。这里用固定宽高 + contain，
+   横图 / 竖图都不会被拉伸变形，也不受原图比例影响。 */
+.rich-text :deep(img.rt-sticker) {
+  width: 96px;
+  height: 96px;
+  max-width: none;
+  object-fit: contain;
+  margin: 6px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+/* 气泡里上下留白更紧一点，尺寸保持与评论一致 */
+.rich-text.rt-bubble :deep(img.rt-sticker) {
+  margin: 2px 0;
+}
+
+@media (max-width: 700px) {
+  .rich-text :deep(img.rt-sticker) {
+    width: 84px;
+    height: 84px;
+  }
+}
+
 /* 引用块（回复 / 引用消息的头） */
 .rich-text :deep(blockquote) {
   margin: 2px 0 6px;

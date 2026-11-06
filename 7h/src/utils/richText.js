@@ -46,8 +46,12 @@ function safeUrl(raw) {
   return null
 }
 
-/** 图片：![alt](/uploads/x.png) */
-const IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)\)/g
+/**
+ * 图片：![alt](/uploads/x.png)
+ * 表情包额外带 `{sticker}` 后缀：![名字](/uploads/x.png){sticker}
+ * 后缀只做样式标记（固定缩略图尺寸），不影响 URL 解析。
+ */
+const IMAGE_RE = /!\[([^\]]*)\]\(([^)\s]+)\)(\{sticker\})?/g
 /** 链接：[文字](https://...) */
 const LINK_RE = /\[([^\]]+)\]\(([^)\s]+)\)/g
 /** 裸链接：https://... */
@@ -77,10 +81,14 @@ export function renderRichText(text) {
 
   // ---- 第 1 步：在原始文本上提取图片 / 链接（此时 URL 还是原样，判断最准确）----
 
-  out = out.replace(IMAGE_RE, (whole, alt, url) => {
+  out = out.replace(IMAGE_RE, (whole, alt, url, stickerFlag) => {
     const safe = safeUrl(url)
     if (!safe) return whole
-    return stash(`<img src="${escapeHtml(safe)}" alt="${escapeHtml(alt)}" loading="lazy">`)
+    // 表情包走 rt-sticker：固定 96×96 缩略图，不按原图分辨率铺满评论区 / 气泡
+    const cls = stickerFlag ? ' class="rt-sticker"' : ''
+    return stash(
+      `<img src="${escapeHtml(safe)}" alt="${escapeHtml(alt)}"${cls} loading="lazy">`
+    )
   })
 
   out = out.replace(LINK_RE, (whole, label, url) => {

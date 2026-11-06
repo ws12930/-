@@ -1,7 +1,10 @@
 /**
- * 后端接口封装（Spring Boot: http://localhost:8081/api/auth）
- * 开发期由 vite 代理 /api -> 8081，生产部署时改为同源即可。
+ * 后端接口封装（Spring Boot: http://192.168.68.77:8081/api/auth）
+ * 前端一律用相对路径 /api，由 vite（开发）或 start.py（生产）反代到后端，
+ * 所以换服务器 IP 只需改反代目标，页面代码不用动。
  */
+import { handleBanned, isBanned } from '../utils/session'
+
 const BASE = '/api/auth'
 
 const TOKEN_KEY = 'bn-token'
@@ -24,6 +27,9 @@ async function request(path, { method = 'GET', body } = {}) {
   } catch (e) {
     throw new Error('后端返回内容无法解析')
   }
+
+  // 账号被封禁（40301）：清登录态并弹窗，登录页也会命中这条
+  if (isBanned(data)) handleBanned(data.message)
 
   // 后端统一返回体：{ code:0 成功 | 非0 业务失败, message, data }
   if (!res.ok || data.code !== 0) {

@@ -101,7 +101,8 @@ public class UserService {
             throw BizException.unauthorized("用户名或密码不正确");
         }
         if (user.getStatus() == null || user.getStatus() != 1) {
-            throw BizException.forbidden("账号已被禁用，请联系管理员");
+            // 40301：前端识别到这个码会直接弹「账号已被封禁」提示
+            throw BizException.banned(BizException.BANNED_MESSAGE);
         }
         boolean remember = Boolean.TRUE.equals(request.remember());
         return toVO(user, issueToken(user, remember));

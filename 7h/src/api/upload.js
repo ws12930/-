@@ -2,6 +2,8 @@
  * 文件上传接口封装。
  * 注意：这里不能手动设置 Content-Type，交给浏览器自动带 multipart boundary。
  */
+import { handleBanned, isBanned } from '../utils/session'
+
 const BASE = '/api'
 
 function getToken() {
@@ -35,6 +37,9 @@ export async function uploadFile(file) {
   } catch (e) {
     throw new Error('后端返回内容无法解析')
   }
+
+  // 账号被封禁（40301）：清登录态并弹窗
+  if (isBanned(data)) handleBanned(data.message)
 
   if (!res.ok || data.code !== 0) {
     throw new Error(data.message || '上传失败，请稍后重试')

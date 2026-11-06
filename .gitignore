@@ -1,0 +1,22 @@
+# ========== 后端（Spring Boot / Maven）==========
+# 编译产物不进版本库：它们曾经完整，反而掩盖了源码缺文件的问题
+springBootTest/target/
+
+# 启动器把后端输出写到这里，日志属于本机运行态数据
+springBootTest/log/startup.log
+springBootTest/log/*.log.gz
+
+# 仓库内 uploads 只是旧数据的搬运源，正式文件在 ~/blog-data/uploads
+springBootTest/uploads/
+
+# ========== 前端（Vue / Vite）==========
+7h/node_modules/
+7h/dist/**/*.map
+7h/.vite/
+
+# ========== IDE / 系统 ==========
+.idea/
+*.iml
+.vscode/
+Thumbs.db
+.DS_Store

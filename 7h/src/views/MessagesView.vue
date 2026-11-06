@@ -49,7 +49,9 @@
               <UserAvatar :user="peerOf(c)" :size="30" />
               <div class="ms-conv-main">
                 <span class="ms-conv-name">{{ peerName(c) }}</span>
-                <span class="ms-conv-last">{{ c.lastMessage || '' }}</span>
+                <!-- 会话列表只给一行摘要：表情 / 图片的 markdown 折成「[图片]」，
+                     否则这里会露出生涩的 ![](/uploads/...) 原文 -->
+                <span class="ms-conv-last">{{ toPlainSummary(c.lastMessage || '', 24) }}</span>
               </div>
               <span v-if="c.unread" class="ms-badge">{{ c.unread }}</span>
             </li>
@@ -443,7 +445,12 @@ async function sendStickerNow(sticker) {
   sending.value = true
   error.value = ''
   try {
-    await sendMessage(currentPeer.value, `![${sticker.name || '表情'}](${sticker.url})`, null)
+    // {sticker} 后缀让 RichText 按固定 96×96 缩略图渲染，不再撑满气泡
+    await sendMessage(
+      currentPeer.value,
+      `![${sticker.name || '表情'}](${sticker.url}){sticker}`,
+      null
+    )
     await open(currentPeer.value)
     await loadConversations()
   } catch (e) {

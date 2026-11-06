@@ -55,7 +55,9 @@
             :target="commentInput"
             :upload="true"
             :stickers="true"
+            :instant-sticker="true"
             placeholder="说点什么…"
+            @sticker-send="sendStickerNow"
           />
           <textarea
             ref="commentInput"
@@ -458,6 +460,31 @@ async function submitComment() {
     await loadComments()
   } catch (e) {
     error.value = e.message || '评论失败'
+  } finally {
+    sending.value = false
+  }
+}
+
+/**
+ * 表情包「选中即发送」：点一下就作为一条评论发出去。
+ *
+ * 刻意不动 draft：用户可能正打了一半字，表情不该把草稿带走；
+ * 若当前处于「回复某人」状态，这张表情就作为该条回复发出。
+ */
+async function sendStickerNow(sticker) {
+  if (!sticker?.url || sending.value) return
+  sending.value = true
+  try {
+    const payload = {
+      // {sticker} 后缀让 RichText 按固定尺寸缩略图渲染
+      content: `![${sticker.name || '表情'}](${sticker.url}){sticker}`
+    }
+    if (replyTarget.value) payload.parentId = replyTarget.value.id
+    await createComment(post.value.id, payload)
+    replyTarget.value = null
+    await loadComments()
+  } catch (e) {
+    error.value = e.message || '表情发送失败'
   } finally {
     sending.value = false
   }

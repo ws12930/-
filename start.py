@@ -56,7 +56,21 @@ BACKEND = "http://%s:%d" % (LAN_HOST, BACKEND_PORT)
 FRONTEND_PORT = 4173
 FRONTEND_PORT_TRIES = 12
 PROXY_PREFIXES = ("/api/", "/uploads/")
-BACKEND_WAIT_SECONDS = 300  # 首次启动要下依赖，给足时间
+# 后端等待策略：不再是「死等 N 秒就判失败」。
+# 首次启动 mvnw 要从中央仓库拉一整棵依赖树，慢的时候能拖十几分钟，
+# 但日志一直在增长就说明它没死 —— 只要还在动就把截止时间往后推，
+# 只有日志连续 LOG_STALL_SECONDS 没有任何变化，才算真的卡住。
+def _env_int(name, default):
+    try:
+        value = int((os.environ.get(name) or "").strip() or default)
+        return value if value > 0 else default
+    except ValueError:
+        return default
+
+
+BACKEND_WAIT_SECONDS = _env_int("BLOG_BACKEND_WAIT", 300)
+BACKEND_WAIT_MAX = _env_int("BLOG_BACKEND_WAIT_MAX", 1800)
+LOG_STALL_SECONDS = 150
 
 DB_NAME = "fenglin_blog"
 DB_HOST = os.environ.get("BLOG_DB_HOST", "127.0.0.1")
@@ -145,6 +159,28 @@ def tail_file(path, lines=40):
         return ""
     text = data.decode("utf-8", "replace")
     return "\n".join(text.splitlines()[-lines:])
+
+
+def file_size(path):
+    """日志体积，用来判断后端进程还在不在干活"""
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def last_log_line(path, width=100):
+    """日志里最后一行有内容的，播报进度时给用户一个「它还在动」的证据"""
+    for line in reversed(tail_file(path, 8).splitlines()):
+        s = line.strip()
+        if s:
+            return s if len(s) <= width else s[:width - 1] + "…"
+    return ""
+
+
+def looks_downloading(path):
+    """最近几行是不是还在拉 Maven 依赖 —— 决定超时后该给什么建议"""
+    return "Downloading from" in tail_file(path, 12)
 
 
 # ---------------------------------------------------------------- 数据库自检
@@ -438,11 +474,16 @@ def start_backend():
         creationflags=creation,
     )
 
-    deadline = time.time() + BACKEND_WAIT_SECONDS
-    next_notice = time.time() + 15
-    while time.time() < deadline:
+    started = time.time()
+    deadline = started + BACKEND_WAIT_SECONDS
+    hard_deadline = started + BACKEND_WAIT_MAX
+    next_notice = started + 15
+    last_size = file_size(BACKEND_LOG)
+    last_change = started
+
+    while True:
         if backend_alive():
-            log("后端已就绪：%s/api" % BACKEND)
+            log("后端已就绪：%s/api（用时 %d 秒）" % (BACKEND, time.time() - started))
             return proc
         if proc.poll() is not None:
             print()
@@ -451,14 +492,47 @@ def start_backend():
             print(tail_file(BACKEND_LOG, 30))
             print("-" * 60)
             return die("后端启动失败", "完整日志：%s" % BACKEND_LOG)
-        if time.time() >= next_notice:
-            log("后端仍在启动中，请稍候（日志：%s）" % BACKEND_LOG)
-            next_notice += 15
+
+        now = time.time()
+        size = file_size(BACKEND_LOG)
+        if size != last_size:
+            last_size = size
+            last_change = now
+            # 日志还在长 = Maven 还在下依赖 / Spring 还在编译，把截止时间往后顺延。
+            # 这一条就是本次「超时后 1 秒就启动成功」的根因补丁：
+            # 原来只按死时间判失败，等于把正在下载的进程当成卡死。
+            if deadline < hard_deadline:
+                deadline = min(now + BACKEND_WAIT_SECONDS, hard_deadline)
+
+        if now >= deadline:
+            break
+
+        if now >= next_notice:
+            log("后端仍在启动中（已等 %d 秒）— %s"
+                % (now - started, last_log_line(BACKEND_LOG) or "准备中"))
+            next_notice = now + 15
         time.sleep(1)
 
-    warn("等待后端超时（%d 秒），日志尾部：" % BACKEND_WAIT_SECONDS)
-    print(tail_file(BACKEND_LOG, 20))
-    return die("后端启动超时", "完整日志：%s" % BACKEND_LOG)
+    stalled_for = int(time.time() - last_change)
+    stalled = stalled_for >= LOG_STALL_SECONDS
+    warn("等待后端超时（已等 %d 秒，%s），日志尾部："
+         % (time.time() - started,
+            "日志已 %d 秒没有变化，像是卡住了" % stalled_for if stalled else "一直在下载依赖"))
+    print("-" * 60)
+    print(tail_file(BACKEND_LOG, 25))
+    print("-" * 60)
+    # 超时后不要留个孤儿进程占着 8081，否则下次启动会被误判成「端口被占用」
+    if proc.poll() is None:
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)
+        warn("已结束这次的后端进程，避免它继续占着 %d 端口" % BACKEND_PORT)
+
+    hint = "完整日志：%s" % BACKEND_LOG
+    if looks_downloading(BACKEND_LOG):
+        hint += ("\n       依赖还没下完。可以先把依赖下全，之后启动就是秒开："
+                 "\n       cd springBootTest && mvnw -B dependency:go-offline")
+    if not stalled:
+        hint += ("\n       网络慢就把上限调大：set BLOG_BACKEND_WAIT_MAX=3600 后再运行")
+    return die("后端启动超时", hint)
 
 
 def start_frontend():

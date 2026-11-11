@@ -44,6 +44,9 @@
         <!-- 右键菜单 -->
         <Transition name="menu">
           <div v-if="menuOpen" class="mc-menu" @mouseleave="menuOpen = false">
+            <button class="mc-play" type="button" @click="menuAction(playGame)">
+              <span class="mc-play-dot" aria-hidden="true">▶</span>游玩游戏
+            </button>
             <button type="button" @click="menuAction(next)">换个表情</button>
             <button type="button" @click="menuAction(toggleMute)">
               {{ muted ? '取消静音' : '暂时静音' }}
@@ -73,6 +76,9 @@
         <span v-if="muted" class="mc-mute">静音</span>
       </button>
     </template>
+
+    <!-- 游戏窗口自己 teleport 到 body，放在这里只是借宿，不影响桌宠布局 -->
+    <GameStage :open="gameOpen" @close="closeGame" />
   </div>
 </template>
 
@@ -80,6 +86,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { readMe } from '../utils/author'
+import GameStage from './GameStage.vue'
 
 import mWelcome from '../assets/mascot/mascot-welcome.png'
 import mNofight from '../assets/mascot/mascot-nofight.png'
@@ -211,6 +218,7 @@ const showCard = ref(false)
 const mini = ref(false)
 const muted = ref(false)
 const menuOpen = ref(false)
+const gameOpen = ref(false)
 const meName = ref('')
 const hour = ref(new Date().getHours())
 
@@ -512,6 +520,17 @@ function menuAction(fn) {
   fn()
 }
 
+/** 右键「游玩游戏」：把「七日回响」开在站内窗口里，不跳走 */
+function playGame() {
+  gameOpen.value = true
+}
+
+/** 关掉窗口后打个招呼，让桌宠和游戏之间有个交代 */
+function closeGame() {
+  gameOpen.value = false
+  speak('回来啦，玩得开心吗？')
+}
+
 function toggleMute() {
   muted.value = !muted.value
   saveState()
@@ -753,6 +772,39 @@ watch(
   transition: background 0.16s ease, color 0.16s ease;
 }
 .mc-menu button:hover { background: rgba(159, 216, 189, 0.14); color: #9fd8bd; }
+
+/* 「游玩游戏」是唯一带主色的项：和下面四个日常操作分开，一眼看到入口 */
+.mc-menu button.mc-play {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #bceace;
+  background: rgba(159, 216, 189, 0.12);
+}
+.mc-menu button.mc-play:hover {
+  color: #e0f7ec;
+  background: rgba(159, 216, 189, 0.24);
+}
+/* 分隔线：菜单里唯一一条，用来切「玩游戏」和常规设置 */
+.mc-menu button.mc-play::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -4px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.mc-play-dot {
+  font-size: 8px;
+  line-height: 1;
+  color: #9fd8bd;
+}
 .menu-enter-active, .menu-leave-active { transition: opacity 0.16s ease, transform 0.16s ease; }
 .menu-enter-from, .menu-leave-to { opacity: 0; transform: translateY(4px); }
 

@@ -10,8 +10,13 @@
     <link rel="icon" type="image/png" sizes="256x256" href="./favicon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <title>7h · 博客</title>
-    <script type="module" crossorigin src="./assets/index-B3LQiG-b.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CmapYzWo.css">
+    <!-- 「七日回响」的站内游戏地址。留空 = 用构建时注入的 VITE_GAME_URL，
+         再没有就用 utils/gameConfig.js 里的默认值；要换成新链接只改这里，
+         部署后改 dist/index.html 的同一行即可，不必重新打包。
+         最稳的做法是把游戏产物放进 public/game/，这里填 ./game/（同源托管）。 -->
+    <script>window.__7H_GAME_URL__ = ''</script>
+    <script type="module" crossorigin src="./assets/index-BxhTBLMH.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CadCJs-2.css">
   </head>
   <body>
     <div id="app"></div>

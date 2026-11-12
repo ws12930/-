@@ -45,7 +45,10 @@
         <Transition name="menu">
           <div v-if="menuOpen" class="mc-menu" @mouseleave="menuOpen = false">
             <button class="mc-play" type="button" @click="menuAction(playGame)">
-              <span class="mc-play-dot" aria-hidden="true">▶</span>游玩游戏
+              <span class="mc-play-dot" aria-hidden="true">▶</span>七日回响
+            </button>
+            <button class="mc-play mc-play-2" type="button" @click="menuAction(playRift)">
+              <span class="mc-play-dot" aria-hidden="true">⚔</span>裂锋对决
             </button>
             <button type="button" @click="menuAction(next)">换个表情</button>
             <button type="button" @click="menuAction(toggleMute)">
@@ -79,6 +82,16 @@
 
     <!-- 游戏窗口自己 teleport 到 body，放在这里只是借宿，不影响桌宠布局 -->
     <GameStage :open="gameOpen" @close="closeGame" />
+    <GameStage
+      :open="riftOpen"
+      title="裂锋对决"
+      en="RIFT CLASH"
+      :src="riftUrl"
+      auto-focus
+      foot-left="2D 格斗 · 单人打电脑 / 同键盘双人对战"
+      foot-right="关掉窗口即重新开局，战绩不存档"
+      @close="closeRift"
+    />
   </div>
 </template>
 
@@ -86,6 +99,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { readMe } from '../utils/author'
+import { resolveRiftUrl } from '../utils/gameConfig'
 import GameStage from './GameStage.vue'
 
 import mWelcome from '../assets/mascot/mascot-welcome.png'
@@ -219,6 +233,8 @@ const mini = ref(false)
 const muted = ref(false)
 const menuOpen = ref(false)
 const gameOpen = ref(false)
+const riftOpen = ref(false)
+const riftUrl = resolveRiftUrl()
 const meName = ref('')
 const hour = ref(new Date().getHours())
 
@@ -525,6 +541,16 @@ function playGame() {
   gameOpen.value = true
 }
 
+/** 右键「裂锋对决」：格斗游戏，同样开在站内窗口 */
+function playRift() {
+  riftOpen.value = true
+}
+
+function closeRift() {
+  riftOpen.value = false
+  speak('拳头别挥到我这来哦')
+}
+
 /** 关掉窗口后打个招呼，让桌宠和游戏之间有个交代 */
 function closeGame() {
   gameOpen.value = false
@@ -790,8 +816,9 @@ watch(
   color: #e0f7ec;
   background: rgba(159, 216, 189, 0.24);
 }
+.mc-menu button.mc-play-2 { margin-bottom: 6px; }
 /* 分隔线：菜单里唯一一条，用来切「玩游戏」和常规设置 */
-.mc-menu button.mc-play::after {
+.mc-menu button.mc-play-2::after {
   content: '';
   position: absolute;
   left: 6px;

@@ -14,9 +14,11 @@
          再没有就用 utils/gameConfig.js 里的默认值；要换成新链接只改这里，
          部署后改 dist/index.html 的同一行即可，不必重新打包。
          最稳的做法是把游戏产物放进 public/game/，这里填 ./game/（同源托管）。 -->
-    <script>window.__7H_GAME_URL__ = ''</script>
-    <script type="module" crossorigin src="./assets/index-BxhTBLMH.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CadCJs-2.css">
+    <script>window.__7H_GAME_URL__ = './game/'</script>
+    <!-- 第二个游戏「裂锋对决」，同样同源静态托管，换地址改这一行 -->
+    <script>window.__7H_RIFT_URL__ = './rift-clash/'</script>
+    <script type="module" crossorigin src="./assets/index-Bgy3viz1.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Ck1ouGGE.css">
   </head>
   <body>
     <div id="app"></div>

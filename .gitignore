@@ -20,3 +20,7 @@ springBootTest/uploads/
 .vscode/
 Thumbs.db
 .DS_Store
+
+# 启动脚本自身的字节码缓存
+__pycache__/
+*.pyc

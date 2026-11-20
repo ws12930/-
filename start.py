@@ -3,7 +3,8 @@
 """7h 博客一键启动脚本
 
 双击 start-all.bat 即可，本脚本会依次完成：
-  1. 预检：前端构建产物是否完整、后端 mvnw 是否存在
+  1. 预检：前端构建产物是否完整（缺 js/css 会白屏），缺了先自动 npm run build，
+     仍然失败就带着打包报错直接退出，不再让你对着白屏猜
   2. 数据库自检：库不存在时自动建库并导入 springBootTest/fenglin_blog.sql
   3. 拉起 Spring Boot 后端（8081），若已在运行则复用
   4. 启动前端联调服务（4173 起）：托管 7h/dist 静态资源 + 反代 /api、/uploads 到后端
@@ -15,6 +16,12 @@
   * 后端没起来就**不打开浏览器**，避免看到一个白屏还以为在跑；
   * 4173 被别的程序占用时不再假装“前端已在运行”，会自动顺延到 4174、4175……
   * 后端连不上数据库（库不存在）时自动建库导入 SQL，不用手动开 Navicat。
+  * dist 里 index.html 引用的 js/css 缺失（白屏的头号原因）不再只警告一句就放行：
+    先自动 npm run build，打包报错原样打出来并退出，绝不打开浏览器；
+  * 静态资源缺失时如实回 404，不再用 index.html 冒充 js/css（那只会让浏览器报一句
+    看不懂的 MIME 错误，白屏原因反而被埋掉）；
+  * 反代和探活统一走 127.0.0.1，不再「本机 → 自己的局域网 IP → 本机」绕一圈，
+    避免回环 NAT / 防火墙按进程放行导致接口全部超时。
 
 按 Ctrl+C 退出，会连带关闭后端进程。
 
@@ -52,7 +59,12 @@ LAN_HOST = os.environ.get("BLOG_HOST", "192.168.68.77")
 # 不会出现“绑定到局域网 IP 后本机访问 localhost 反而不通”的坑。
 BIND_HOST = "0.0.0.0"
 BACKEND_PORT = 8081
+# 对外展示 / 给浏览器用的地址（局域网 IP）
 BACKEND = "http://%s:%d" % (LAN_HOST, BACKEND_PORT)
+# 脚本自己访问后端一律走回环：反代和探活都发生在同一台机器上，
+# 绕一圈「本机 → 自己的局域网 IP → 本机」在部分 Windows 环境（回环 NAT、
+# 防火墙按进程放行）会卡住几十秒，表现为页面一直转圈、接口全部超时。
+BACKEND_LOCAL = "http://127.0.0.1:%d" % BACKEND_PORT
 FRONTEND_PORT = 4173
 FRONTEND_PORT_TRIES = 12
 PROXY_PREFIXES = ("/api/", "/uploads/")
@@ -303,7 +315,7 @@ def backend_alive():
     if not port_open(BACKEND_PORT):
         return False
     try:
-        with urlopen(BACKEND + "/api/auth/ping", timeout=3) as resp:
+        with urlopen(BACKEND_LOCAL + "/api/auth/ping", timeout=3) as resp:
             return resp.status == 200
     except HTTPError:
         # 接口存在但不是 200，同样说明端口上是后端
@@ -338,13 +350,118 @@ def dist_assets_missing():
     return missing
 
 
+def find_npm():
+    """找 npm.cmd：优先 node 安装目录，其次 PATH"""
+    for name in ("npm.cmd", "npm"):
+        for path in os.environ.get("PATH", "").split(os.pathsep):
+            cand = os.path.join(path, name)
+            if os.path.isfile(cand):
+                return cand
+    for pattern in (r"C:\Program Files\nodejs\npm.cmd",
+                    r"C:\Program Files (x86)\nodejs\npm.cmd",
+                    os.path.join(os.path.expanduser("~"), r"AppData\Roaming\npm\npm.cmd")):
+        if os.path.isfile(pattern):
+            return pattern
+    return None
+
+
+def rebuild_frontend():
+    """dist 缺文件时现场重新打包。返回 True 表示打包成功且产物完整"""
+    npm = find_npm()
+    if not npm:
+        warn("找不到 npm，无法自动重新打包。请手动执行：cd 7h && npm run build")
+        return False
+    if not os.path.isfile(os.path.join(FRONT_DIR, "package.json")):
+        warn("7h 目录里没有 package.json，无法打包")
+        return False
+    if not os.path.isdir(os.path.join(FRONT_DIR, "node_modules")):
+        log("首次打包，先安装前端依赖（npm install）...")
+        try:
+            install = subprocess.run([npm, "install", "--no-audit", "--no-fund"],
+                                     cwd=FRONT_DIR, capture_output=True, text=True,
+                                     encoding="utf-8", errors="replace", timeout=600)
+        except subprocess.TimeoutExpired:
+            warn("npm install 超过 10 分钟没结束，先中断了（检查网络 / npm 源）")
+            return False
+        if install.returncode != 0:
+            warn("npm install 失败：%s" % (install.stderr or "").strip()[-500:])
+            return False
+
+    log("正在重新打包前端（npm run build）...")
+    try:
+        built = subprocess.run([npm, "run", "build"], cwd=FRONT_DIR,
+                               capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=300)
+    except subprocess.TimeoutExpired:
+        warn("npm run build 超过 5 分钟没结束，先中断了")
+        return False
+    if built.returncode != 0:
+        # 打包报错才是真因（比如某个源文件没提交），把尾部输出直接摊给用户看，
+        # 否则用户只会看到一个白屏，还得自己去猜。
+        detail = ((built.stderr or "") + (built.stdout or "")).strip().splitlines()
+        print("-" * 60)
+        print("\n".join(detail[-25:]))
+        print("-" * 60)
+        warn("前端打包失败 —— 上面的报错就是白屏的真因")
+        return False
+    return not dist_assets_missing()
+
+
+def ensure_dist():
+    """保证 dist 里 index.html 引用的 js/css 都在。无法修好则返回 False"""
+    if not os.path.isdir(DIST_DIR):
+        die("找不到前端构建产物：%s" % DIST_DIR,
+            "先在 7h 目录执行 npm install && npm run build")
+        return False
+    missing = dist_assets_missing()
+    if not missing:
+        return True
+    warn("前端构建产物不完整，缺少：%s" % ", ".join(missing))
+    warn("这会让页面白屏（index.html 能打开，但 js/css 全是 404），先尝试自动重新打包")
+    if rebuild_frontend():
+        log("前端已重新打包完成（%s）" % DIST_DIR)
+        return True
+    die("前端构建产物不完整，且自动打包没有成功",
+        "在 7h 目录手动执行 npm run build，按报错补上缺失的源文件后再启动")
+    return False
+
+
 # ---------------------------------------------------------------- 前端联调服务
+# 静态资源后缀：这些路径找不到就该 404，不能回 index.html。
+# 曾经的做法是无条件回 index.html 做 SPA 回退，结果 js/css 缺失时
+# 浏览器拿到一段 HTML 当 module 执行，控制台只报一句看不懂的
+# 「Expected a JavaScript module script but the server responded with a MIME type of text/html」，
+# 页面照样白屏，问题反而更难查。
+ASSET_EXTS = (".js", ".mjs", ".css", ".map", ".json", ".png", ".jpg", ".jpeg",
+              ".gif", ".svg", ".webp", ".ico", ".bmp", ".woff", ".woff2",
+              ".ttf", ".otf", ".eot", ".mp3", ".mp4", ".webm", ".wasm", ".txt")
+
+
 class ProxyHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIST_DIR, **kwargs)
 
     def _is_proxy(self):
         return any(self.path.startswith(p) for p in PROXY_PREFIXES)
+
+    def _looks_like_asset(self):
+        """请求的是不是静态资源（而不是前端路由）"""
+        path = self.path.split("?", 1)[0].split("#", 1)[0]
+        if path.startswith("/assets/"):
+            return True
+        return os.path.splitext(path)[1].lower() in ASSET_EXTS
+
+    def _asset_404(self, method):
+        """资源缺失：明确回 404，并把「可能是构建产物不完整」写进响应体"""
+        msg = ("404 资源不存在：%s\n\n"
+               "如果是 /assets/ 下的 js 或 css，说明 dist 构建产物不完整（页面会白屏）。\n"
+               "在 7h 目录执行 npm run build 后重新启动即可。\n" % self.path).encode("utf-8")
+        self.send_response(404)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(msg)))
+        self.end_headers()
+        if method != "HEAD":
+            self.wfile.write(msg)
 
     def _proxy(self, method):
         length = int(self.headers.get("Content-Length") or 0)
@@ -353,9 +470,12 @@ class ProxyHandler(SimpleHTTPRequestHandler):
         for key in ("Content-Type", "Accept", "Authorization", "X-Requested-With"):
             if self.headers.get(key):
                 headers[key] = self.headers.get(key)
-        req = Request(BACKEND + self.path, data=body, headers=headers, method=method)
+        req = Request(BACKEND_LOCAL + self.path, data=body, headers=headers, method=method)
+        # 上传接口可能很慢，读操作没必要陪着一起等：前端点了登录却卡一分钟，
+        # 用户只会以为“页面又白屏了”，所以读接口的等待上限收紧到 20 秒。
+        timeout = 60 if method in ("POST", "PUT") else 20
         try:
-            with urlopen(req, timeout=60) as resp:
+            with urlopen(req, timeout=timeout) as resp:
                 payload = resp.read()
                 self.send_response(resp.status)
                 if resp.headers.get("Content-Type"):
@@ -375,21 +495,36 @@ class ProxyHandler(SimpleHTTPRequestHandler):
             if method != "HEAD":
                 self.wfile.write(payload)
         except URLError as e:
-            msg = ("后端未响应：%s" % e.reason).encode("utf-8")
-            self.send_response(502)
+            self._error_page(502, "后端未响应：%s" % e.reason, method)
+        except (socket.timeout, TimeoutError):
+            # 读超时抛的是 TimeoutError，不是 URLError；不接住的话这个请求
+            # 会被直接掐断，浏览器侧既没有状态码也没有响应体，最难排查。
+            self._error_page(504, "后端 %d 秒没有响应（%s）" % (timeout, BACKEND_LOCAL), method)
+
+    def _error_page(self, code, text, method="GET"):
+        msg = ("%d %s\n\n后端可能还在启动，或者已经挂了：\n"
+               "启动日志尾部：\n%s\n" % (code, text, tail_file(BACKEND_LOG, 12))).encode("utf-8")
+        try:
+            self.send_response(code)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Content-Length", str(len(msg)))
             self.end_headers()
             if method != "HEAD":
                 self.wfile.write(msg)
+        except OSError:
+            pass
 
     def do_GET(self):
         if self._is_proxy():
             self._proxy("GET")
             return
-        # SPA 回退：dist 里没有对应静态文件时交给前端路由处理，
-        # 否则直接访问 /posts/67 或刷新子页面都会 404。
+        # 静态资源缺失时如实回 404：冒充 index.html 只会让白屏更难定位
         if not self._static_exists():
+            if self._looks_like_asset():
+                self._asset_404("GET")
+                return
+            # SPA 回退：dist 里没有对应静态文件时交给前端路由处理，
+            # 否则直接访问 /posts/67 或刷新子页面都会 404。
             self.path = "/index.html"
         super().do_GET()
 
@@ -398,6 +533,9 @@ class ProxyHandler(SimpleHTTPRequestHandler):
             self._proxy("HEAD")
             return
         if not self._static_exists():
+            if self._looks_like_asset():
+                self._asset_404("HEAD")
+                return
             self.path = "/index.html"
         super().do_HEAD()
 
@@ -570,14 +708,8 @@ def main():
 
     resolve_host()
 
-    if not os.path.isdir(DIST_DIR):
-        return die("找不到前端构建产物：%s" % DIST_DIR,
-                   "先在 7h 目录执行 npm install && npm run build")
-
-    missing = dist_assets_missing()
-    if missing:
-        warn("前端构建产物不完整，缺少：%s" % ", ".join(missing))
-        warn("这样打开只会白屏 —— 需要重新 npm run build（源码齐全时）")
+    if not ensure_dist():
+        return 1
 
     if not os.path.isdir(BACKEND_DIR):
         return die("找不到后端目录：%s" % BACKEND_DIR)

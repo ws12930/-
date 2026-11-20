@@ -1,0 +1,10 @@
+# 站内游戏的单文件产物（七日回响 / 裂锋对决）
+#
+# 这两个游戏都是一个 HTML 打包所有素材，内部散落着大量跨行的模板字符串和正则。
+# 交给 git 做换行转换（本机 core.autocrlf=true）会在下次 checkout 时把它们改成 CRLF，
+# 模板字符串里平白多出 \r，可能改变游戏内文字排版甚至匹配结果。
+# 因此这四个文件一律按「二进制」处理：进出一律原样，不做任何 EOL 转换。
+7h/public/game/index.html       -text
+7h/public/rift-clash/index.html -text
+7h/dist/game/index.html         -text
+7h/dist/rift-clash/index.html   -text

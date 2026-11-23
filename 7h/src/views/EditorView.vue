@@ -85,6 +85,7 @@
 </template>
 
 <script setup>
+import { EVT_BLOG_SAVED } from '../utils/constants'
 import { reactive, ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { createPost, updatePost, listCategories, listPosts } from '../api/blog'
@@ -186,7 +187,7 @@ async function doSave() {
     } else {
       await createPost(payload)
     }
-    window.dispatchEvent(new CustomEvent('blog:saved', { detail: { status } }))
+    window.dispatchEvent(new CustomEvent(EVT_BLOG_SAVED, { detail: { status } }))
     router.push({ name: status.toUpperCase() === 'DRAFT' ? 'mine' : 'blog' })
   } catch (e) {
     error.value = e.message || '保存失败'

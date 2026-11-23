@@ -2,12 +2,13 @@
  * 消息通知接口封装：别人评论/回复/点赞/关注我的提醒
  * 开发期由 vite 代理 /api -> 8081
  */
+import { SESSION_TOKEN_KEY } from '../utils/constants'
 import { handleBanned, isBanned } from '../utils/session'
 
 const BASE = '/api'
 
 function getToken() {
-  return localStorage.getItem('bn-token') || ''
+  return localStorage.getItem(SESSION_TOKEN_KEY) || ''
 }
 
 function authHeaders() {

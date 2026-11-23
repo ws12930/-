@@ -125,7 +125,7 @@ onBeforeUnmount(() => {
 .bg-carousel {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: var(--z-bg);
   overflow: hidden;
   pointer-events: none;
   background: var(--c-bg);

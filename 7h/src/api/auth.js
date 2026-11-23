@@ -3,11 +3,12 @@
  * 前端一律用相对路径 /api，由 vite（开发）或 start.py（生产）反代到后端，
  * 所以换服务器 IP 只需改反代目标，页面代码不用动。
  */
+import { SESSION_TOKEN_KEY } from '../utils/constants'
 import { handleBanned, isBanned } from '../utils/session'
 
 const BASE = '/api/auth'
 
-const TOKEN_KEY = 'bn-token'
+const TOKEN_KEY = SESSION_TOKEN_KEY
 
 async function request(path, { method = 'GET', body } = {}) {
   let res

@@ -211,6 +211,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY, notifySessionChanged } from '../utils/constants'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getPostBySlug, listComments, createComment, deleteComment } from '../api/blog'
@@ -263,7 +264,8 @@ async function refreshMe() {
   try {
     const res = await getMe()
     if (res.data?.id) {
-      localStorage.setItem('bn-user', JSON.stringify(res.data))
+      localStorage.setItem(SESSION_ME_KEY, JSON.stringify(res.data))
+      notifySessionChanged()
       me.value = res.data
     }
   } catch {
@@ -692,6 +694,6 @@ onBeforeUnmount(() => clearTimeout(highlightTimer))
   border-radius: 999px;
   background: rgba(20, 24, 22, 0.92);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  z-index: 90;
+  z-index: var(--z-dialog);
 }
 </style>

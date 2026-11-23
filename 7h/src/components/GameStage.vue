@@ -61,8 +61,8 @@
             <Transition name="gs-fade">
               <div v-if="!ready && !failed" class="gs-loading">
                 <span class="gs-ring"></span>
-                <p>正在打开七日回响…</p>
-                <p v-if="!slow" class="gs-loading-tip">第一次加载要拉整包的剧情和素材，稍等一下</p>
+                <p>正在打开{{ title }}…</p>
+                <p v-if="!slow" class="gs-loading-tip">{{ loadingTip }}</p>
                 <button v-else class="gs-btn gs-slow-btn" type="button" @click="openTab">
                   有点慢？在新标签页打开
                 </button>
@@ -110,7 +110,9 @@ const props = defineProps({
   /* 键盘驱动的游戏（格斗）打开后把焦点送进 iframe，不然按键全被博客收走 */
   autoFocus: { type: Boolean, default: false },
   footLeft: { type: String, default: '纯前端 Galgame · 存档保存在游戏自己的本地存储' },
-  footRight: { type: String, default: '关掉窗口会重新加载，进度记得先在游戏里「存档」' }
+  footRight: { type: String, default: '关掉窗口会重新加载，进度记得先在游戏里「存档」' },
+  /* 加载层提示：不同游戏包的体积/资源不一样，说法跟着传 */
+  loadingTip: { type: String, default: '第一次加载要拉整包的资源，稍等一下' }
 })
 
 const emit = defineEmits(['close'])
@@ -267,7 +269,7 @@ onBeforeUnmount(() => {
 .gs-mask {
   position: fixed;
   inset: 0;
-  z-index: 95;
+  z-index: var(--z-game);
   display: flex;
   align-items: center;
   justify-content: center;

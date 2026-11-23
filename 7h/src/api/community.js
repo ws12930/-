@@ -3,12 +3,13 @@
  * 覆盖签到、建吧 / 改吧、举报提交。
  * 开发期由 vite 代理 /api -> 8081，生产由 start.py 反代，页面只用相对路径。
  */
+import { SESSION_TOKEN_KEY } from '../utils/constants'
 import { handleBanned, isBanned } from '../utils/session'
 
 const BASE = '/api'
 
 export function getToken() {
-  return localStorage.getItem('bn-token') || ''
+  return localStorage.getItem(SESSION_TOKEN_KEY) || ''
 }
 
 function authHeaders() {

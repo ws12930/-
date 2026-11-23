@@ -224,6 +224,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY } from '../utils/constants'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import {
   listConversations,
@@ -324,7 +325,7 @@ let searchTimer = null
 
 const me = ref(null)
 try {
-  me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
+  me.value = JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
 } catch {
   me.value = null
 }
@@ -804,7 +805,7 @@ onBeforeUnmount(() => {
 .ms-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--z-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -854,7 +855,7 @@ onBeforeUnmount(() => {
   left: 50%;
   bottom: 56px;
   transform: translateX(-50%);
-  z-index: 95;
+  z-index: var(--z-game);
   padding: 9px 20px;
   font-size: 13px;
   color: var(--c-text);

@@ -74,4 +74,44 @@ public final class AdminModels {
             long totalCount,
             int maxStreak) {
     }
+
+    /** 私信管理列表项；recalled 为 1 时表示已撤回，正文已清空 */
+    public record AdminMessageVO(
+            Long id,
+            Long senderId,
+            String senderName,
+            Long receiverId,
+            String receiverName,
+            String content,
+            Integer readFlag,
+            Integer recalled,
+            LocalDateTime createdAt) {
+    }
+
+    /** 私信概览：总条数 / 今日新增 / 未读条数 */
+    public record MessageSummary(
+            long total,
+            long today,
+            long unread) {
+    }
+
+    /** 社区（吧）管理列表项 */
+    public record AdminCategoryVO(
+            Long id,
+            String name,
+            String slug,
+            String description,
+            Long ownerId,
+            String ownerName,
+            long postCount,
+            Integer status,
+            Integer sortOrder,
+            LocalDateTime createdAt) {
+    }
+
+    /** 管理端修改吧信息（管理员可改名，前台吧主只能改简介） */
+    public record CategoryEditRequest(
+            String name,
+            String description) {
+    }
 }

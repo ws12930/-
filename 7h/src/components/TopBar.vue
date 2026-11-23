@@ -187,6 +187,15 @@ async function loadMe() {
     const res = await getUserProfile(cached.id)
     const data = res.data?.user || res.data || {}
     me.value = { ...cached, ...data }
+    // 管理员权限被升级 / 取消后，把新角色写回本地登录态：
+    // 否则路由守卫读到的还是旧角色，刷新后依然进不去（或出不来）后台
+    if (data.role && data.role !== cached.role) {
+      try {
+        localStorage.setItem('bn-user', JSON.stringify({ ...cached, role: data.role }))
+      } catch {
+        /* 隐私模式下写不进去，忽略即可 */
+      }
+    }
   } catch {
     me.value = cached
   }

@@ -56,6 +56,15 @@ public class PostController {
         return R.ok(postService.getPublishedBySlug(slug));
     }
 
+    /** 关注流：已关注用户的最新文章 */
+    @RequireAuth
+    @GetMapping("/following")
+    public R<PageResult<PostVO>> following(
+            @RequestParam(defaultValue = "1") long current,
+            @RequestParam(defaultValue = "10") long size) {
+        return R.ok(postService.listFollowingPosts(current, size));
+    }
+
     @RequireAuth
     @GetMapping("/mine")
     public R<PageResult<PostVO>> mine(

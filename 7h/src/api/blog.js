@@ -63,6 +63,11 @@ export function listPosts(params) {
   return request('/posts' + toQuery(params))
 }
 
+/** 关注流：已关注用户的最新文章（需登录） */
+export function listFollowingPosts(params) {
+  return request('/posts/following' + toQuery(params))
+}
+
 /** 当前用户的文章（含草稿） */
 export function listMyPosts(params) {
   return request('/posts/mine' + toQuery(params))

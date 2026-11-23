@@ -11,7 +11,26 @@
       <!-- 首屏轮播栏：挂载期间背景定格，避免两个轮播同时动 -->
       <BannerCarousel class="home-banner" />
 
-      <div v-if="categories.length" class="chip-row">
+      <div class="view-tabs">
+        <button
+          class="seg-btn"
+          :class="{ on: activeTab === 'all' }"
+          type="button"
+          @click="pickTab('all')"
+        >
+          全部文章
+        </button>
+        <button
+          class="seg-btn"
+          :class="{ on: activeTab === 'following' }"
+          type="button"
+          @click="pickTab('following')"
+        >
+          我的关注
+        </button>
+      </div>
+
+      <div v-if="activeTab === 'all' && categories.length" class="chip-row">
         <button
           class="seg-btn"
           :class="{ on: !activeCategory }"
@@ -40,8 +59,8 @@
       </div>
 
       <div v-else-if="!posts.length" class="empty-state">
-        <span class="es-ico">📝</span>
-        <span>还没有文章，去写一篇吧</span>
+        <span class="es-ico">{{ activeTab === 'following' ? '🌱' : '📝' }}</span>
+        <span>{{ activeTab === 'following' ? '关注的人还没有发新文章，去用户主页关注几个人吧' : '还没有文章，去写一篇吧' }}</span>
       </div>
 
       <ul v-else class="post-list">
@@ -90,7 +109,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { listPosts, listCategories, deletePost, setPinned } from '../api/blog'
+import { listPosts, listFollowingPosts, listCategories, deletePost, setPinned } from '../api/blog'
 import { toggleLike } from '../api/social'
 import TopBar from '../components/TopBar.vue'
 import BannerCarousel from '../components/BannerCarousel.vue'
@@ -105,6 +124,7 @@ const router = useRouter()
 
 const posts = ref([])
 const categories = ref([])
+const activeTab = ref('all')
 const activeCategory = ref(null)
 const keyword = ref('')
 const appliedKeyword = ref('')
@@ -144,12 +164,26 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const res = await listPosts({
+    const params = {
       current: page.value,
-      size: pageSize,
-      categoryId: activeCategory.value || undefined,
-      keyword: appliedKeyword.value || undefined
-    })
+      size: pageSize
+    }
+    let res
+    if (activeTab.value === 'following') {
+      if (!me.value) {
+        error.value = '登录后才能查看关注动态'
+        posts.value = []
+        total.value = 0
+        return
+      }
+      res = await listFollowingPosts(params)
+    } else {
+      res = await listPosts({
+        ...params,
+        categoryId: activeCategory.value || undefined,
+        keyword: appliedKeyword.value || undefined
+      })
+    }
     const data = res.data || {}
     posts.value = withPostAuthors(data.records || data.list || [])
     total.value = data.total ?? posts.value.length
@@ -168,6 +202,13 @@ async function loadCategories() {
   } catch {
     categories.value = []
   }
+}
+
+function pickTab(tab) {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  page.value = 1
+  load()
 }
 
 function pickCategory(id) {
@@ -236,6 +277,13 @@ onBeforeUnmount(() => {
 .home-shell { padding-bottom: 48px; }
 
 .home-banner { margin-bottom: 18px; }
+
+.view-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
 
 .chip-row {
   display: flex;

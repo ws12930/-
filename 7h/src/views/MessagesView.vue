@@ -57,6 +57,26 @@
             </li>
           </ul>
 
+          <template v-if="followedContacts.length">
+            <h2 class="ms-side-title ms-side-title-sub">关注的人</h2>
+            <ul class="ms-conv-list">
+              <li
+                v-for="u in followedContacts"
+                :key="u.id"
+                class="ms-conv"
+                :class="{ on: currentPeer === u.id }"
+                @click="startChat(u)"
+              >
+                <UserAvatar :user="u" :size="30" />
+                <div class="ms-conv-main">
+                  <span class="ms-conv-name">{{ u.nickname || u.username }}</span>
+                  <span class="ms-conv-last">@{{ u.username }}</span>
+                </div>
+                <span class="ms-new">聊天</span>
+              </li>
+            </ul>
+          </template>
+
           <template v-if="keyword">
             <h2 class="ms-side-title ms-side-title-sub">找人</h2>
             <div v-if="searching" class="ms-tip">搜索中…</div>
@@ -211,7 +231,8 @@ import {
   sendMessage,
   searchUsers,
   deleteMessage,
-  recallMessage
+  recallMessage,
+  listFollowing
 } from '../api/social'
 import PageNav from '../components/PageNav.vue'
 import BackButton from '../components/BackButton.vue'
@@ -222,6 +243,7 @@ import { toPlainSummary } from '../utils/richText'
 import { addSticker } from '../utils/stickers'
 
 const conversations = ref([])
+const followedPeople = ref([])
 const messages = ref([])
 const currentPeer = ref(null)
 const draft = ref('')
@@ -316,6 +338,17 @@ const matchedConversations = computed(() => {
   return conversations.value.filter((c) => peerName(c).toLowerCase().includes(kw))
 })
 
+/** 已关注、但还没聊过的人：关注后自动出现在私信联系人里 */
+const followedContacts = computed(() => {
+  const kw = keyword.value.toLowerCase()
+  const peerIds = new Set(conversations.value.map((c) => c.peerId))
+  return followedPeople.value.filter((u) => {
+    if (!u || u.id === me.value?.id || peerIds.has(u.id)) return false
+    if (!kw) return true
+    return (u.nickname || u.username || '').toLowerCase().includes(kw)
+  })
+})
+
 function peerName(c) {
   return c.peerName || c.peer?.nickname || c.peer?.username || '用户'
 }
@@ -403,6 +436,16 @@ async function loadConversations() {
   } catch (e) {
     error.value = e.message || '加载失败'
     conversations.value = []
+  }
+}
+
+async function loadFollowing() {
+  if (!me.value?.id) return
+  try {
+    const res = await listFollowing(me.value.id)
+    followedPeople.value = (res.data || []).filter((u) => u && !u.banned)
+  } catch {
+    followedPeople.value = []
   }
 }
 
@@ -507,6 +550,7 @@ function onKeydown(event) {
 
 onMounted(() => {
   loadConversations()
+  loadFollowing()
   document.addEventListener('keydown', onKeydown)
 })
 

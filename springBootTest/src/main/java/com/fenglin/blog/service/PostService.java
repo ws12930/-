@@ -11,6 +11,7 @@ import com.fenglin.blog.dto.BlogModels.PostVO;
 import com.fenglin.blog.dto.BlogModels.TagVO;
 import com.fenglin.blog.entity.Category;
 import com.fenglin.blog.entity.Comment;
+import com.fenglin.blog.entity.Follow;
 import com.fenglin.blog.entity.Post;
 import com.fenglin.blog.entity.PostLike;
 import com.fenglin.blog.entity.PostTag;
@@ -18,6 +19,7 @@ import com.fenglin.blog.entity.Tag;
 import com.fenglin.blog.entity.User;
 import com.fenglin.blog.mapper.CategoryMapper;
 import com.fenglin.blog.mapper.CommentMapper;
+import com.fenglin.blog.mapper.FollowMapper;
 import com.fenglin.blog.mapper.PostLikeMapper;
 import com.fenglin.blog.mapper.PostMapper;
 import com.fenglin.blog.mapper.PostTagMapper;
@@ -58,11 +60,12 @@ public class PostService {
     private final UserMapper userMapper;
     private final LikeService likeService;
     private final LevelService levelService;
+    private final FollowMapper followMapper;
 
     public PostService(PostMapper postMapper, CategoryMapper categoryMapper, TagMapper tagMapper,
                        PostTagMapper postTagMapper, CommentMapper commentMapper,
                        PostLikeMapper postLikeMapper, UserMapper userMapper, LikeService likeService,
-                       LevelService levelService) {
+                       LevelService levelService, FollowMapper followMapper) {
         this.postMapper = postMapper;
         this.categoryMapper = categoryMapper;
         this.tagMapper = tagMapper;
@@ -72,6 +75,7 @@ public class PostService {
         this.userMapper = userMapper;
         this.likeService = likeService;
         this.levelService = levelService;
+        this.followMapper = followMapper;
     }
 
     /* ================= 读 ================= */
@@ -109,6 +113,29 @@ public class PostService {
                     .orderByDesc(Post::getPublishedAt)
                     .orderByDesc(Post::getId);
         }
+        return toPageResult(postMapper.selectPage(pageOf(current, size), query));
+    }
+
+    /**
+     * 关注流：当前用户已关注的人的最新已发布文章，按发布时间倒序。
+     * 没有关注任何人时返回空页，不报错。
+     */
+    public PageResult<PostVO> listFollowingPosts(long current, long size) {
+        Long myId = CurrentUserHolder.require().userId();
+        List<Follow> follows = followMapper.selectList(new LambdaQueryWrapper<Follow>()
+                .eq(Follow::getFollowerId, myId));
+        if (follows.isEmpty()) {
+            return new PageResult<>(0, current, size, 0, Collections.emptyList());
+        }
+        List<Long> authorIds = new ArrayList<>(follows.size());
+        for (Follow follow : follows) {
+            authorIds.add(follow.getFolloweeId());
+        }
+        LambdaQueryWrapper<Post> query = new LambdaQueryWrapper<Post>()
+                .in(Post::getAuthorId, authorIds)
+                .ne(Post::getStatus, DRAFT)
+                .orderByDesc(Post::getPublishedAt)
+                .orderByDesc(Post::getId);
         return toPageResult(postMapper.selectPage(pageOf(current, size), query));
     }
 

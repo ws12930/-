@@ -80,8 +80,7 @@ const total = ref(0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size)))
 
 const navItems = [
-  { label: '首页', to: 'home' },
-  { label: '写文章', to: 'editor' }
+  { label: '首页', to: 'home' }
 ]
 
 function summary(p) {

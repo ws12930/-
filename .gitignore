@@ -11,7 +11,9 @@ springBootTest/uploads/
 
 # ========== 前端（Vue / Vite）==========
 7h/node_modules/
-7h/dist/**/*.map
+# 构建产物不进版本库：哈希文件名每次打包都变，多人各自构建必然冲突
+# start.py 的 ensure_dist() 会在产物缺失时自动 npm run build
+7h/dist/
 7h/.vite/
 
 # ========== IDE / 系统 ==========

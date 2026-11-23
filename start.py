@@ -410,8 +410,13 @@ def rebuild_frontend():
 def ensure_dist():
     """保证 dist 里 index.html 引用的 js/css 都在。无法修好则返回 False"""
     if not os.path.isdir(DIST_DIR):
-        die("找不到前端构建产物：%s" % DIST_DIR,
-            "先在 7h 目录执行 npm install && npm run build")
+        # dist 不进版本库，新克隆/清缓存后这里必然为空，现场构建一份即可
+        log("找不到前端构建产物：%s，尝试自动打包" % DIST_DIR)
+        if rebuild_frontend():
+            log("前端已重新打包完成（%s）" % DIST_DIR)
+            return True
+        die("前端构建产物不存在，且自动打包没有成功",
+            "在 7h 目录手动执行 npm install && npm run build")
         return False
     missing = dist_assets_missing()
     if not missing:

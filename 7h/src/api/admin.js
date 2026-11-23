@@ -71,6 +71,11 @@ export function setUserStatus(userId, status) {
   return request(`/admin/users/${userId}/status?status=${status}`, { method: 'PUT' })
 }
 
+/** 升级 / 取消管理员权限：role 取 ADMIN / USER */
+export function setUserRole(userId, role) {
+  return request(`/admin/users/${userId}/role?role=${role}`, { method: 'PUT' })
+}
+
 /** 举报列表：status 取 PENDING / HANDLED / IGNORED / 空（全部） */
 export function adminReports(params) {
   return request('/admin/reports' + toQuery(params))
@@ -108,4 +113,46 @@ export function adminCheckins(params) {
 /** 签到概览 */
 export function adminCheckinSummary() {
   return request('/admin/checkins/summary')
+}
+
+/* ==================== 私信管理 ==================== */
+
+/** 全站私信：keyword 匹配正文或双方昵称 / 用户名 */
+export function adminMessages(params) {
+  return request('/admin/messages' + toQuery(params))
+}
+
+/** 私信概览：{ total, today, unread } */
+export function adminMessageSummary() {
+  return request('/admin/messages/summary')
+}
+
+/** 删除一条私信（违规内容处理） */
+export function deleteAdminMessage(messageId) {
+  return request(`/admin/messages/${messageId}`, { method: 'DELETE' })
+}
+
+/* ==================== 社区（吧）管理 ==================== */
+
+/** 全部吧：含吧主、帖子数与启用状态 */
+export function adminCategories(params) {
+  return request('/admin/categories' + toQuery(params))
+}
+
+/** 启用 / 停用吧：status 1 启用 / 0 停用 */
+export function setCategoryStatus(categoryId, status) {
+  return request(`/admin/categories/${categoryId}/status?status=${status}`, { method: 'PUT' })
+}
+
+/** 修改吧信息：管理员可以改名 */
+export function updateAdminCategory(categoryId, name, description) {
+  return request(`/admin/categories/${categoryId}`, {
+    method: 'PUT',
+    body: { name, description }
+  })
+}
+
+/** 删除吧：吧下还有帖子时后端会拒绝 */
+export function deleteAdminCategory(categoryId) {
+  return request(`/admin/categories/${categoryId}`, { method: 'DELETE' })
 }

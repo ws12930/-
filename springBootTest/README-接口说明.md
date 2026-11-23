@@ -141,6 +141,31 @@ Authorization: Bearer <login response token>
 
 鉴权改动：`AuthInterceptor` 现在对**所有**请求都会尝试解析 `Authorization` 头（令牌无效时按游客处理，不阻断请求），因此公开接口也能返回 `liked`、`followed`、`self` 等个性化字段；`@RequireAuth` 仍然是强制登录的唯一开关。
 
+## 管理后台接口
+
+全部挂在 `/api/admin/**` 下，类上标注 `@RequireAdmin`，非管理员访问返回 40300。
+
+| 方法     | 路径                                     | 说明                                        |
+| ------ | -------------------------------------- | ----------------------------------------- |
+| GET    | `/api/admin/posts`                     | 全站文章（含草稿），支持 `keyword,status`             |
+| GET    | `/api/admin/users`                     | 用户列表，支持 `keyword`                         |
+| PUT    | `/api/admin/users/{id}/status?status=` | 启用（1）/ 禁用（0）账号，不能禁用自己                     |
+| PUT    | `/api/admin/users/{id}/role?role=`     | 升级 / 取消管理员：`ADMIN` / `USER`，不能改自己的角色       |
+| GET    | `/api/admin/reports`                   | 举报列表，支持 `status`                          |
+| PUT    | `/api/admin/reports/{id}/status?status=` | 处理举报：`HANDLED` / `IGNORED`               |
+| GET    | `/api/admin/comments`                  | 评论审核列表，支持 `keyword,status`                |
+| PUT    | `/api/admin/comments/{id}/status?status=` | 隐藏（`HIDDEN`）/ 恢复（`NORMAL`）评论             |
+| DELETE | `/api/admin/comments/{id}`             | 删除评论，子回复会被摘成顶层                            |
+| GET    | `/api/admin/checkins`                  | 签到记录，支持 `keyword`                         |
+| GET    | `/api/admin/checkins/summary`          | 签到概览（今日人数 / 今日次数 / 累计 / 最长连续）             |
+| GET    | `/api/admin/messages`                  | 全站私信分页，`keyword` 匹配正文或双方昵称 / 用户名          |
+| GET    | `/api/admin/messages/summary`          | 私信概览：`total / today / unread`             |
+| DELETE | `/api/admin/messages/{id}`             | 删除私信，并把引用它的消息 `quote_id` 置空                |
+| GET    | `/api/admin/categories`                | 全部吧（含吧主、帖子数、状态），支持 `keyword`              |
+| PUT    | `/api/admin/categories/{id}/status?status=` | 启用（1）/ 停用（0）吧                            |
+| PUT    | `/api/admin/categories/{id}`           | 修改吧名 / 简介（管理员可以改名，吧名 2-20 字、不可重名）         |
+| DELETE | `/api/admin/categories/{id}`           | 删除吧；吧下还有帖子时返回 40000 拒绝                    |
+
 ## 已知限制
 
 - 登录、用户名查重、找回密码接口尚未做频率限制，公网部署前需补充限流或验证码。

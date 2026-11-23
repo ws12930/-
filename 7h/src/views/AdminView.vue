@@ -5,7 +5,7 @@
     <div class="pg-shell mid">
       <header class="pg-head">
         <h1 class="pg-title grad-text">管 理 后 台</h1>
-        <p class="pg-sub grad-text">文章 · 评论审核 · 用户 · 签到 · 举报</p>
+        <p class="pg-sub grad-text">文章 · 评论 · 私信 · 用户 · 签到 · 社区 · 举报</p>
       </header>
 
       <div class="ad-tabs">
@@ -132,6 +132,67 @@
         />
       </section>
 
+      <!-- ================= 私信管理 ================= -->
+      <section v-else-if="tab === 'messages'">
+        <div class="ad-stats three">
+          <div class="panel ad-stat">
+            <span class="ad-stat-num">{{ messageSummary.total }}</span>
+            <span class="ad-stat-label">私信总数</span>
+          </div>
+          <div class="panel ad-stat">
+            <span class="ad-stat-num">{{ messageSummary.today }}</span>
+            <span class="ad-stat-label">今日新增</span>
+          </div>
+          <div class="panel ad-stat">
+            <span class="ad-stat-num">{{ messageSummary.unread }}</span>
+            <span class="ad-stat-label">未读条数</span>
+          </div>
+        </div>
+
+        <div class="ad-toolbar">
+          <input
+            v-model.trim="messageQuery.keyword"
+            class="ad-input"
+            type="search"
+            placeholder="搜索私信内容 / 发送者 / 接收者"
+            @keydown.enter="loadMessages(1)"
+          />
+          <button class="g-btn g-btn-sm" :disabled="loading.messages" @click="loadMessages(1)">查询</button>
+        </div>
+
+        <p v-if="error.messages" class="ad-error">{{ error.messages }}</p>
+        <div v-if="loading.messages && !messages.length" class="empty-state">
+          <span class="es-ico">✉️</span><span>正在加载…</span>
+        </div>
+        <div v-else-if="!messages.length" class="empty-state">
+          <span class="es-ico">✉️</span><span>{{ messageQuery.keyword ? '没有匹配的私信' : '本站还没有私信往来' }}</span>
+        </div>
+
+        <ul v-else class="ad-list">
+          <li v-for="m in messages" :key="m.id" class="panel ad-row ad-row-top">
+            <div class="ad-main">
+              <div class="ad-line">
+                <span class="ad-tag" :class="m.recalled ? 'draft' : (m.readFlag === 1 ? 'pub' : 'unread')">
+                  {{ m.recalled ? '已撤回' : (m.readFlag === 1 ? '已读' : '未读') }}
+                </span>
+                <span class="ad-title plain">{{ m.senderName || '用户#' + m.senderId }}</span>
+                <span class="ad-meta">→ {{ m.receiverName || '用户#' + m.receiverId }}</span>
+              </div>
+              <p class="ad-content">{{ m.recalled ? '发送者已撤回这条消息' : (m.content || '（空消息）') }}</p>
+              <span class="ad-meta">#{{ m.id }} · {{ formatTime(m.createdAt) }}</span>
+            </div>
+            <div class="ad-actions">
+              <button class="mini-btn danger" type="button" :disabled="busy" @click="removeMessage(m)">删除</button>
+            </div>
+          </li>
+        </ul>
+
+        <Pager
+          :current="messagePage.current" :pages="messagePage.pages" :total="messagePage.total"
+          :disabled="loading.messages" @go="loadMessages"
+        />
+      </section>
+
       <!-- ================= 用户 ================= -->
       <section v-else-if="tab === 'users'">
         <div class="ad-toolbar">
@@ -154,7 +215,7 @@
           <li v-for="u in users" :key="u.id" class="panel ad-row">
             <div class="ad-main">
               <div class="ad-line">
-                <span class="ad-tag" :class="u.role === 'ADMIN' ? 'admin' : 'pub'">{{ u.role }}</span>
+                <span class="ad-tag" :class="u.role === 'ADMIN' ? 'admin' : 'pub'">{{ roleLabel(u.role) }}</span>
                 <span class="ad-title plain">{{ u.nickname || u.username }}</span>
                 <span class="ad-meta">@{{ u.username }}</span>
               </div>
@@ -164,6 +225,18 @@
             </div>
             <div class="ad-actions">
               <span class="ad-tag" :class="u.status === 1 ? 'pub' : 'draft'">{{ u.status === 1 ? '正常' : '已禁用' }}</span>
+              <!-- 升级 / 取消管理员权限：不能改自己，避免把自己锁在后台外面 -->
+              <span v-if="isSelf(u)" class="ad-meta">当前账号</span>
+              <button
+                v-else
+                class="mini-btn"
+                :class="{ mutual: u.role !== 'ADMIN' }"
+                type="button"
+                :disabled="busy"
+                @click="toggleRole(u)"
+              >
+                {{ u.role === 'ADMIN' ? '取消管理员' : '升级管理员' }}
+              </button>
               <button class="mini-btn" type="button" :disabled="busy" @click="toggleUser(u)">
                 {{ u.status === 1 ? '禁用' : '启用' }}
               </button>
@@ -238,8 +311,58 @@
         />
       </section>
 
+      <!-- ================= 社区（吧）管理 ================= -->
+      <section v-else-if="tab === 'community'">
+        <div class="ad-toolbar">
+          <input
+            v-model.trim="categoryQuery.keyword"
+            class="ad-input"
+            type="search"
+            placeholder="按吧名 / 简介搜索"
+            @keydown.enter="loadCategories(1)"
+          />
+          <button class="g-btn g-btn-sm" :disabled="loading.community" @click="loadCategories(1)">查询</button>
+        </div>
+
+        <p v-if="error.community" class="ad-error">{{ error.community }}</p>
+        <div v-if="loading.community && !categories.length" class="empty-state">
+          <span class="es-ico">🏘️</span><span>正在加载…</span>
+        </div>
+        <div v-else-if="!categories.length" class="empty-state">
+          <span class="es-ico">🏘️</span><span>没有匹配的吧</span>
+        </div>
+
+        <ul v-else class="ad-list">
+          <li v-for="c in categories" :key="c.id" class="panel ad-row">
+            <div class="ad-main">
+              <div class="ad-line">
+                <span class="ad-tag" :class="c.status === 1 ? 'pub' : 'draft'">{{ c.status === 1 ? '启用中' : '已停用' }}</span>
+                <span class="ad-title plain">{{ c.name }}</span>
+                <span class="ad-chip">{{ c.postCount ?? 0 }} 篇帖子</span>
+              </div>
+              <span class="ad-meta">
+                吧主：{{ c.ownerName || '官方 / 无吧主' }} · 标识 {{ c.slug }} · #{{ c.id }} · {{ formatTime(c.createdAt) }}
+              </span>
+              <span v-if="c.description" class="ad-meta">简介：{{ c.description }}</span>
+            </div>
+            <div class="ad-actions">
+              <button class="mini-btn" type="button" :disabled="busy" @click="openCategoryDialog(c)">编辑</button>
+              <button class="mini-btn" type="button" :disabled="busy" @click="toggleCategoryStatus(c)">
+                {{ c.status === 1 ? '停用' : '启用' }}
+              </button>
+              <button class="mini-btn danger" type="button" :disabled="busy" @click="removeCategory(c)">删除</button>
+            </div>
+          </li>
+        </ul>
+
+        <Pager
+          :current="categoryPage.current" :pages="categoryPage.pages" :total="categoryPage.total"
+          :disabled="loading.community" @go="loadCategories"
+        />
+      </section>
+
       <!-- ================= 举报 ================= -->
-      <section v-else>
+      <section v-else-if="tab === 'reports'">
         <div class="ad-toolbar">
           <select v-model="reportQuery.status" class="ad-select" @change="loadReports(1)">
             <option value="PENDING">待处理</option>
@@ -283,6 +406,35 @@
 
     <div v-if="toast" class="ad-toast">{{ toast }}</div>
 
+    <!-- 编辑吧信息：管理员可以改名 -->
+    <div v-if="categoryDialog" class="ad-mask" @click.self="closeCategoryDialog">
+      <div class="panel ad-dialog">
+        <h3 class="ad-dialog-title grad-text">编 辑 吧 信 息</h3>
+        <input
+          v-model.trim="categoryForm.name"
+          class="ad-input full"
+          type="text"
+          maxlength="20"
+          placeholder="吧名，2-20 个字"
+        />
+        <textarea
+          v-model.trim="categoryForm.description"
+          class="ad-input full"
+          rows="3"
+          maxlength="200"
+          placeholder="一句话介绍这个吧（选填）"
+        ></textarea>
+        <p class="ad-meta">管理员改名后，吧的 URL 标识（{{ categoryForm.slug }}）保持不变，旧链接照常可访问。</p>
+        <p v-if="categoryDialogError" class="ad-error">{{ categoryDialogError }}</p>
+        <div class="ad-dialog-actions">
+          <button class="g-btn g-btn-sm" type="button" :disabled="categorySaving" @click="submitCategoryDialog">
+            {{ categorySaving ? '保存中…' : '保 存' }}
+          </button>
+          <button class="g-btn g-btn-sm ad-cancel" type="button" @click="closeCategoryDialog">取 消</button>
+        </div>
+      </div>
+    </div>
+
     <ConfirmDialog :state="confirmState" @confirm="confirm" @close="close" />
   </div>
 </template>
@@ -301,46 +453,88 @@ import {
   adminComments,
   adminCheckins,
   adminCheckinSummary,
+  adminMessages,
+  adminMessageSummary,
+  adminCategories,
   setUserStatus,
+  setUserRole,
   setCommentStatus,
   deleteComment,
+  deleteAdminMessage,
+  deleteAdminCategory,
+  setCategoryStatus,
+  updateAdminCategory,
   handleReport
 } from '../api/admin'
 
 const tabs = [
   { key: 'posts', label: '文章' },
   { key: 'comments', label: '评论' },
+  { key: 'messages', label: '私信' },
   { key: 'users', label: '用户' },
   { key: 'checkins', label: '签到' },
+  { key: 'community', label: '社区' },
   { key: 'reports', label: '举报' }
 ]
 const tab = ref('posts')
 
 const posts = ref([])
 const comments = ref([])
+const messages = ref([])
 const users = ref([])
 const checkins = ref([])
+const categories = ref([])
 const reports = ref([])
 
 const postPage = reactive({ current: 1, size: 10, total: 0, pages: 1 })
 const commentPage = reactive({ current: 1, size: 10, total: 0, pages: 1 })
+const messagePage = reactive({ current: 1, size: 10, total: 0, pages: 1 })
 const userPage = reactive({ current: 1, size: 10, total: 0, pages: 1 })
 const checkinPage = reactive({ current: 1, size: 10, total: 0, pages: 1 })
+const categoryPage = reactive({ current: 1, size: 10, total: 0, pages: 1 })
 const reportPage = reactive({ current: 1, size: 10, total: 0, pages: 1 })
 
 const postQuery = reactive({ keyword: '', status: '' })
 const commentQuery = reactive({ keyword: '', status: 'ALL' })
+const messageQuery = reactive({ keyword: '' })
 const userQuery = reactive({ keyword: '' })
 const checkinQuery = reactive({ keyword: '' })
+const categoryQuery = reactive({ keyword: '' })
 const reportQuery = reactive({ status: 'PENDING' })
 
-const loading = reactive({ posts: false, comments: false, users: false, checkins: false, reports: false })
-const error = reactive({ posts: '', comments: '', users: '', checkins: '', reports: '' })
+const loading = reactive({
+  posts: false,
+  comments: false,
+  messages: false,
+  users: false,
+  checkins: false,
+  community: false,
+  reports: false
+})
+const error = reactive({
+  posts: '',
+  comments: '',
+  messages: '',
+  users: '',
+  checkins: '',
+  community: '',
+  reports: ''
+})
 const summary = reactive({ todayUsers: 0, todayCount: 0, totalCount: 0, maxStreak: 0 })
+const messageSummary = reactive({ total: 0, today: 0, unread: 0 })
 const pendingCount = ref(0)
 const busy = ref(false)
 const toast = ref('')
 let toastTimer = null
+
+/** 当前登录的管理员 id：判断「不能改自己的角色」 */
+const myId = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('bn-user') || 'null')?.id || null
+  } catch {
+    return null
+  }
+})()
 
 const { state: confirmState, ask: askConfirm, confirm, close } = useConfirm()
 
@@ -361,6 +555,10 @@ function formatTime(v) {
 function isDraft(p) {
   return String(p.status || '').toUpperCase() === 'DRAFT'
 }
+
+const ROLE_LABEL = { ADMIN: '管理员', USER: '普通用户' }
+const roleLabel = (role) => ROLE_LABEL[String(role || '').toUpperCase()] || role || '普通用户'
+const isSelf = (user) => !!myId && user.id === myId
 
 function pickPage(target, data) {
   target.current = data?.current || 1
@@ -408,6 +606,60 @@ async function loadComments(next = 1) {
   }
 }
 
+/* ================= 私信 ================= */
+
+async function loadMessages(next = 1) {
+  loading.messages = true
+  error.messages = ''
+  try {
+    const res = await adminMessages({
+      current: next,
+      size: messagePage.size,
+      keyword: messageQuery.keyword
+    })
+    messages.value = res.data?.records || []
+    pickPage(messagePage, res.data)
+  } catch (e) {
+    error.messages = e.message || '加载失败'
+    messages.value = []
+  } finally {
+    loading.messages = false
+  }
+  loadMessageSummary()
+}
+
+async function loadMessageSummary() {
+  try {
+    const res = await adminMessageSummary()
+    Object.assign(messageSummary, res.data || {})
+  } catch (e) {
+    /* 概览失败不影响列表 */
+  }
+}
+
+function removeMessage(message) {
+  askConfirm({
+    title: '删 除 私 信',
+    message: '确定删除这条私信吗？',
+    detail: `${message.senderName || '用户#' + message.senderId} → ${message.receiverName || '用户#' + message.receiverId}：`
+      + `${(message.content || '（空消息）').slice(0, 40)}`,
+    confirmText: '删 除',
+    danger: true,
+    onConfirm: async () => {
+      busy.value = true
+      try {
+        await deleteAdminMessage(message.id)
+        showToast('私信已删除')
+        loadMessages(messagePage.current)
+      } catch (e) {
+        showToast(e.message || '删除失败')
+      } finally {
+        busy.value = false
+      }
+    }
+  })
+}
+
 async function loadUsers(next = 1) {
   loading.users = true
   error.users = ''
@@ -452,6 +704,117 @@ async function loadSummary() {
   }
 }
 
+/* ================= 社区（吧） ================= */
+
+async function loadCategories(next = 1) {
+  loading.community = true
+  error.community = ''
+  try {
+    const res = await adminCategories({
+      current: next,
+      size: categoryPage.size,
+      keyword: categoryQuery.keyword
+    })
+    categories.value = res.data?.records || []
+    pickPage(categoryPage, res.data)
+  } catch (e) {
+    error.community = e.message || '加载失败'
+    categories.value = []
+  } finally {
+    loading.community = false
+  }
+}
+
+async function toggleCategoryStatus(category) {
+  const next = category.status === 1 ? 0 : 1
+  const apply = async () => {
+    busy.value = true
+    try {
+      await setCategoryStatus(category.id, next)
+      category.status = next
+      showToast(next === 1 ? '吧已启用' : '吧已停用，前台不再展示')
+    } catch (e) {
+      showToast(e.message || '操作失败')
+    } finally {
+      busy.value = false
+    }
+  }
+  if (next === 0) {
+    askConfirm({
+      title: '停 用 吧',
+      message: `确定停用『${category.name}』吗？`,
+      detail: '停用后社区广场不再展示这个吧，帖子与数据都会保留，可随时重新启用。',
+      confirmText: '停 用',
+      onConfirm: apply
+    })
+    return
+  }
+  apply()
+}
+
+const categoryDialog = ref(false)
+const categoryForm = reactive({ id: null, name: '', description: '', slug: '' })
+const categoryDialogError = ref('')
+const categorySaving = ref(false)
+
+function openCategoryDialog(category) {
+  categoryDialogError.value = ''
+  categoryForm.id = category.id
+  categoryForm.name = category.name || ''
+  categoryForm.description = category.description || ''
+  categoryForm.slug = category.slug || ''
+  categoryDialog.value = true
+}
+
+function closeCategoryDialog() {
+  if (categorySaving.value) return
+  categoryDialog.value = false
+  categoryDialogError.value = ''
+}
+
+async function submitCategoryDialog() {
+  if (categorySaving.value) return
+  const name = categoryForm.name.trim()
+  if (name.length < 2 || name.length > 20) {
+    categoryDialogError.value = '吧名需要 2-20 个字'
+    return
+  }
+  categorySaving.value = true
+  categoryDialogError.value = ''
+  try {
+    const res = await updateAdminCategory(categoryForm.id, name, categoryForm.description)
+    categoryDialog.value = false
+    showToast(res.message || '吧信息已更新')
+    loadCategories(categoryPage.current)
+  } catch (e) {
+    categoryDialogError.value = e.message || '保存失败'
+  } finally {
+    categorySaving.value = false
+  }
+}
+
+function removeCategory(category) {
+  askConfirm({
+    title: '删 除 吧',
+    message: `确定删除『${category.name}』吗？`,
+    detail: '只有没有帖子的吧才能删除，删除后无法恢复。',
+    confirmText: '删 除',
+    danger: true,
+    onConfirm: async () => {
+      busy.value = true
+      try {
+        await deleteAdminCategory(category.id)
+        showToast('吧已删除')
+        loadCategories(categoryPage.current)
+      } catch (e) {
+        showToast(e.message || '删除失败')
+      } finally {
+        busy.value = false
+      }
+    }
+  })
+}
+
 async function loadReports(next = 1) {
   loading.reports = true
   error.reports = ''
@@ -481,8 +844,10 @@ function switchTab(key) {
   tab.value = key
   if (key === 'posts' && !posts.value.length) loadPosts(1)
   else if (key === 'comments') loadComments(commentPage.current)
+  else if (key === 'messages') loadMessages(messagePage.current)
   else if (key === 'users' && !users.value.length) loadUsers(1)
   else if (key === 'checkins') loadCheckins(checkinPage.current)
+  else if (key === 'community') loadCategories(categoryPage.current)
   else if (key === 'reports' && !reports.value.length) loadReports(1)
 }
 
@@ -586,6 +951,33 @@ async function applyUserStatus(user, next) {
   } finally {
     busy.value = false
   }
+}
+
+/** 升级 / 取消管理员权限（后端同样禁止修改自己的角色） */
+function toggleRole(user) {
+  const promote = String(user.role || '').toUpperCase() !== 'ADMIN'
+  const name = user.nickname || user.username
+  askConfirm({
+    title: promote ? '升 级 管 理 员' : '取 消 管 理 员',
+    message: promote ? `确定把 ${name} 升级为管理员吗？` : `确定取消 ${name} 的管理员权限吗？`,
+    detail: promote
+      ? '升级后该用户可以进入后台，管理文章、评论、私信与社区内容。'
+      : '取消后该用户将立即失去后台入口与所有管理权限。',
+    confirmText: promote ? '升 级' : '取 消 权 限',
+    danger: !promote,
+    onConfirm: async () => {
+      busy.value = true
+      try {
+        const res = await setUserRole(user.id, promote ? 'ADMIN' : 'USER')
+        user.role = promote ? 'ADMIN' : 'USER'
+        showToast(res.message || (promote ? '已升级为管理员' : '已取消管理员权限'))
+      } catch (e) {
+        showToast(e.message || '操作失败')
+      } finally {
+        busy.value = false
+      }
+    }
+  })
 }
 
 async function resolveReport(report, status) {
@@ -768,9 +1160,17 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+/* 私信概览只有三张卡片，单独按三列排，避免第四列留空导致卡片偏窄 */
+.ad-stats.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 @media (max-width: 560px) {
   .ad-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ad-stats.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -886,6 +1286,59 @@ onMounted(() => {
 .ad-tag.admin {
   color: var(--c-acid);
   border-color: rgba(217, 255, 77, 0.4);
+}
+
+/* 私信未读：比「已读」更醒目 */
+.ad-tag.unread {
+  color: #ffd479;
+  border-color: rgba(255, 212, 121, 0.5);
+  background: rgba(255, 212, 121, 0.08);
+}
+
+/* 对话框里的输入框占满整行，不参与工具栏的 flex:1 */
+.ad-input.full {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+/* 编辑吧信息对话框 */
+.ad-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 7, 10, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.ad-dialog {
+  width: min(420px, 100%);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ad-dialog-title {
+  margin: 0 0 2px;
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+
+.ad-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ad-dialog-actions .ad-cancel {
+  color: var(--c-dim);
 }
 
 .ad-chip {

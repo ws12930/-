@@ -39,7 +39,9 @@ public final class SocialModels {
             int level,
             String title,
             /** 账号已被管理员封禁（status != 1）；前台据此显示灰态、隐藏关注与举报入口 */
-            Boolean banned) {
+            Boolean banned,
+            /** 角色 USER / ADMIN：被升级后前台刷新即可看到后台入口，不必重新登录 */
+            String role) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -299,7 +299,9 @@ public class UserService {
                 levelService.expOf(user),
                 levelService.levelOf(levelService.expOf(user)),
                 levelService.titleOf(levelService.expOf(user)),
-                user.getStatus() != null && user.getStatus() != 1);
+                user.getStatus() != null && user.getStatus() != 1,
+                // 角色随资料一起下发：被管理员升级后，前台刷新即可出现后台入口
+                user.getRole());
     }
 
     private UserVO toVO(User user, TokenPair tokenPair) {

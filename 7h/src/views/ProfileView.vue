@@ -39,13 +39,13 @@
       </div>
 
       <div class="panel pf-panel">
-        <div class="pf-avatar-row">
-          <UserAvatar :user="previewUser" :size="72" />
-          <div class="pf-avatar-actions">
-            <button class="g-btn g-btn-sm" :disabled="uploading" @click="pickAvatar">
+        <div class="pf-top">
+          <div class="pf-avatar-col">
+            <UserAvatar :user="previewUser" :size="86" ring />
+            <button class="g-btn g-btn-sm pf-upload" :disabled="uploading" @click="pickAvatar">
               {{ uploading ? '上传中…' : '更换头像' }}
             </button>
-            <span class="pf-note">支持 JPG / PNG / GIF / WEBP，不超过 5MB</span>
+            <span class="pf-note">支持 JPG / PNG / GIF / WEBP<br />不超过 5MB</span>
             <input
               ref="fileInput"
               class="pf-file"
@@ -54,24 +54,22 @@
               @change="onFile"
             />
           </div>
-        </div>
 
-        <div class="pf-field">
-          <label for="pf-nickname">昵称</label>
-          <input id="pf-nickname" v-model.trim="form.nickname" type="text" placeholder="展示给别人的名字" />
-        </div>
+          <div class="pf-form-col">
+            <div class="pf-field">
+              <label for="pf-nickname">昵称</label>
+              <input id="pf-nickname" v-model.trim="form.nickname" type="text" placeholder="展示给别人的名字" />
+            </div>
 
-        <div class="pf-field">
-          <label for="pf-avatar">头像地址</label>
-          <input id="pf-avatar" v-model.trim="form.avatar" type="text" placeholder="上传后自动填入，也可手填图片链接" />
-        </div>
-
-        <div class="pf-field">
-          <label for="pf-signature">个性签名</label>
-          <textarea id="pf-signature" v-model.trim="form.signature" rows="3" placeholder="一句话介绍自己"></textarea>
+            <div class="pf-field">
+              <label for="pf-signature">个性签名</label>
+              <textarea id="pf-signature" v-model.trim="form.signature" rows="4" placeholder="一句话介绍自己"></textarea>
+            </div>
+          </div>
         </div>
 
         <div class="pf-actions">
+          <span class="pf-tip">资料修改后点击保存生效</span>
           <button class="g-btn" :disabled="saving" @click="save">
             {{ saving ? '保存中…' : '保 存' }}
           </button>
@@ -216,14 +214,28 @@ onMounted(() => {
 
 <style scoped>
 .profile-page { height: 100%; overflow-y: auto; }
-.pf-error { text-align: center; color: #ff8a8a; font-size: 13px; margin-bottom: 12px; }
-.pf-ok { text-align: center; color: #8fd0ae; font-size: 13px; margin-bottom: 12px; }
-
-.pf-panel { padding: 24px 26px; }
+.pf-error,
+.pf-ok {
+  margin: -4px 0 14px;
+  padding: 9px 12px;
+  text-align: center;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.pf-error {
+  color: #ffb3b3;
+  background: rgba(255, 120, 120, 0.08);
+  border: 1px solid rgba(255, 120, 120, 0.18);
+}
+.pf-ok {
+  color: #a9e0c2;
+  background: rgba(143, 208, 174, 0.08);
+  border: 1px solid rgba(143, 208, 174, 0.18);
+}
 
 /* 等级 / 经验卡 */
 .pf-level { padding: 16px 20px; margin-bottom: 14px; }
-.pf-level-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-level-head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
 .pf-lv-badge {
   padding: 2px 9px;
   font-size: 12px;
@@ -250,12 +262,29 @@ onMounted(() => {
 }
 .pf-level-note { font-size: 11px; color: var(--c-dim); margin: 0; }
 
-.pf-avatar-row { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
-.pf-avatar-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.pf-note { font-size: 11px; color: var(--c-dim); }
+/* 资料卡：头像列 + 表单列，底部统一操作区 */
+.pf-panel { padding: 26px 28px 22px; }
+.pf-top {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+.pf-avatar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding-right: 24px;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+}
+.pf-upload { width: 100%; }
+.pf-note { font-size: 11px; line-height: 1.6; color: var(--c-dim); }
 .pf-file { display: none; }
 
-.pf-field { text-align: left; margin-bottom: 14px; }
+.pf-field { text-align: left; margin-bottom: 16px; }
+.pf-field:last-child { margin-bottom: 0; }
 .pf-field label {
   display: block;
   font-size: 13px;
@@ -275,9 +304,38 @@ onMounted(() => {
   outline: none;
   resize: vertical;
   font-family: inherit;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 .pf-field input:focus,
-.pf-field textarea:focus { border-color: var(--c-ninja); }
+.pf-field textarea:focus {
+  border-color: var(--c-ninja);
+  background: rgba(255, 255, 255, 0.09);
+}
 
-.pf-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.pf-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.pf-tip { font-size: 12px; color: var(--c-dim); }
+
+@media (max-width: 620px) {
+  .pf-panel { padding: 22px 18px 18px; }
+  .pf-top { grid-template-columns: 1fr; gap: 18px; }
+  .pf-avatar-col {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 16px;
+    padding: 0 0 18px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  }
+  .pf-upload { width: auto; }
+  .pf-actions { flex-wrap: wrap; }
+}
 </style>

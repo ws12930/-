@@ -50,6 +50,9 @@
             <button class="mc-play mc-play-2" type="button" @click="menuAction(playRift)">
               <span class="mc-play-dot" aria-hidden="true">⚔</span>裂锋对决
             </button>
+            <button class="mc-play mc-play-3" type="button" @click="menuAction(playGuanglun)">
+              <span class="mc-play-dot" aria-hidden="true">◈</span>光轮
+            </button>
             <button type="button" @click="menuAction(next)">换个表情</button>
             <button type="button" @click="menuAction(toggleMute)">
               {{ muted ? '取消静音' : '暂时静音' }}
@@ -92,6 +95,16 @@
       foot-right="关掉窗口即重新开局，战绩不存档"
       @close="closeRift"
     />
+    <GameStage
+      :open="guanglunOpen"
+      title="光轮"
+      en="LIGHTCYCLE"
+      :src="guanglunUrl"
+      auto-focus
+      foot-left="双人轨迹对战 · 同键盘分控 / AI 陪练 / AI 对决"
+      foot-right="WASD 与方向键分控两位玩家，关掉窗口即结束本局"
+      @close="closeGuanglun"
+    />
   </div>
 </template>
 
@@ -99,7 +112,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { readMe } from '../utils/author'
-import { resolveRiftUrl } from '../utils/gameConfig'
+import { resolveRiftUrl, resolveGuanglunUrl } from '../utils/gameConfig'
 import GameStage from './GameStage.vue'
 
 import mWelcome from '../assets/mascot/mascot-welcome.png'
@@ -234,7 +247,9 @@ const muted = ref(false)
 const menuOpen = ref(false)
 const gameOpen = ref(false)
 const riftOpen = ref(false)
+const guanglunOpen = ref(false)
 const riftUrl = resolveRiftUrl()
+const guanglunUrl = resolveGuanglunUrl()
 const meName = ref('')
 const hour = ref(new Date().getHours())
 
@@ -551,6 +566,16 @@ function closeRift() {
   speak('拳头别挥到我这来哦')
 }
 
+/** 右键「光轮」：双人轨迹对战，同样开在站内窗口 */
+function playGuanglun() {
+  guanglunOpen.value = true
+}
+
+function closeGuanglun() {
+  guanglunOpen.value = false
+  speak('撞线就出局，可别绕晕啦')
+}
+
 /** 关掉窗口后打个招呼，让桌宠和游戏之间有个交代 */
 function closeGame() {
   gameOpen.value = false
@@ -816,9 +841,10 @@ watch(
   color: #e0f7ec;
   background: rgba(159, 216, 189, 0.24);
 }
-.mc-menu button.mc-play-2 { margin-bottom: 6px; }
+.mc-menu button.mc-play-2 { margin-bottom: 4px; }
+.mc-menu button.mc-play-3 { margin-bottom: 6px; }
 /* 分隔线：菜单里唯一一条，用来切「玩游戏」和常规设置 */
-.mc-menu button.mc-play-2::after {
+.mc-menu button.mc-play-3::after {
   content: '';
   position: absolute;
   left: 6px;

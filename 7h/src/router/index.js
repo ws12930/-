@@ -1,3 +1,4 @@
+import { SESSION_ME_KEY } from '../utils/constants'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
@@ -39,7 +40,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   let me = null
   try {
-    me = JSON.parse(localStorage.getItem('bn-user') || 'null')
+    me = JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
   } catch {
     me = null
   }

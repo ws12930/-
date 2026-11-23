@@ -4,12 +4,13 @@
  * 所有接口都会返回「最新完整列表」，调用方拿到 data 直接覆盖本地缓存即可。
  * 具体同步策略见 utils/stickers.js。
  */
+import { SESSION_TOKEN_KEY } from '../utils/constants'
 import { handleBanned, isBanned } from '../utils/session'
 
 const BASE = '/api'
 
 export function getToken() {
-  return localStorage.getItem('bn-token') || ''
+  return localStorage.getItem(SESSION_TOKEN_KEY) || ''
 }
 
 function authHeaders() {

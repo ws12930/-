@@ -5,6 +5,7 @@
  *
  * 归一后形如：{ id, nickname, username, avatar, faction }，缺字段时尽量不丢失原值。
  */
+import { SESSION_ME_KEY, SESSION_TOKEN_KEY } from './constants'
 
 function build(id, nickname, avatar, faction, username) {
   return {
@@ -49,7 +50,7 @@ export function withCommentAuthors(list) {
 /** 当前登录用户：每次都从本地重新读，避免组件 setup 时缓存到过期快照 */
 export function readMe() {
   try {
-    return JSON.parse(localStorage.getItem('bn-user') || 'null')
+    return JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
   } catch {
     return null
   }
@@ -59,7 +60,7 @@ export function readMe() {
 export function isLogged() {
   if (readMe()) return true
   try {
-    return !!localStorage.getItem('bn-token')
+    return !!localStorage.getItem(SESSION_TOKEN_KEY)
   } catch {
     return false
   }

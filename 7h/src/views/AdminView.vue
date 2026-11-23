@@ -440,6 +440,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY } from '../utils/constants'
 import { onMounted, reactive, ref } from 'vue'
 import TopBar from '../components/TopBar.vue'
 import Pager from '../components/Pager.vue'
@@ -530,7 +531,7 @@ let toastTimer = null
 /** 当前登录的管理员 id：判断「不能改自己的角色」 */
 const myId = (() => {
   try {
-    return JSON.parse(localStorage.getItem('bn-user') || 'null')?.id || null
+    return JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')?.id || null
   } catch {
     return null
   }
@@ -1308,7 +1309,7 @@ onMounted(() => {
 .ad-mask {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--z-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1367,7 +1368,7 @@ onMounted(() => {
   border: 1px solid rgba(143, 208, 174, 0.35);
   color: var(--c-text);
   font-size: 13px;
-  z-index: 80;
+  z-index: var(--z-panel);
 }
 
 /* 窄屏：顶栏会换行变高，留白同步收一点；行内操作按钮换到下一行右侧，

@@ -86,7 +86,7 @@ async function submit() {
 .rp-mask {
   position: fixed;
   inset: 0;
-  z-index: 88;
+  z-index: var(--z-report);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -5,6 +5,7 @@
 
     <div class="auth-mascot">
       <img :src="mascotImg" alt="看板娘 青禾" />
+      <p class="auth-mascot-line">别急，按步骤来就能找回</p>
     </div>
 
     <div class="auth-card panel">
@@ -87,7 +88,7 @@ import { reactive, ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { verifyIdentity, resetPassword } from '../api/auth'
 import BackButton from '../components/BackButton.vue'
-import mascotImg from '../assets/mascot/mascot-welcome.png'
+import mascotImg from '../assets/mascot/mascot-welcome.webp'
 
 const router = useRouter()
 

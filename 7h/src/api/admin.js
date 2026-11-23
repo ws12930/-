@@ -1,12 +1,13 @@
 /**
  * 管理后台接口封装（仅 ADMIN 可用，后端由 @RequireAdmin 把关）
  */
+import { SESSION_TOKEN_KEY } from '../utils/constants'
 import { handleBanned, isBanned } from '../utils/session'
 
 const BASE = '/api'
 
 export function getToken() {
-  return localStorage.getItem('bn-token') || ''
+  return localStorage.getItem(SESSION_TOKEN_KEY) || ''
 }
 
 function authHeaders() {

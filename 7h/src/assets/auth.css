@@ -16,7 +16,7 @@
   position: absolute;
   bottom: 0;
   left: 4%;
-  z-index: 1;
+  z-index: var(--z-base);
   height: 74%;
   max-height: 600px;
   pointer-events: none;
@@ -33,6 +33,25 @@
     drop-shadow(0 14px 30px rgba(0, 0, 0, 0.65));
 }
 
+/* 欢迎话术挂在立绘旁：认证页已不渲染浮动桌宠（避免「两个青禾」），
+   原本由桌宠说的 login/register/forgot 场景台词改由这颗静态气泡承载。
+   跟着 .auth-mascot 一起缓慢浮动，pointer-events 继承为 none，纯装饰不挡表单。 */
+.auth-mascot-line {
+  position: absolute;
+  top: 8%;
+  right: -34%;
+  max-width: 230px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1b1d20;
+  background: linear-gradient(135deg, #f4ede2 0%, #fbf8f1 100%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 14px 14px 14px 4px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
 @keyframes auth-float {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-12px); }
@@ -41,7 +60,7 @@
 /* ===== 表单卡片 ===== */
 .auth-card {
   position: relative;
-  z-index: 2;
+  z-index: var(--z-raised);
   width: min(420px, 92vw);
   max-height: 92vh;
   overflow-y: auto;
@@ -156,9 +175,11 @@
   border-radius: 20px;
   background: rgba(0, 0, 0, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  z-index: 5;
+  z-index: var(--z-auth-deco);
 }
 
 @media (max-width: 900px) {
   .auth-mascot { opacity: 0.35; height: 52%; left: -2%; }
+  /* 小屏立绘已经淡到做背景，气泡再往右伸会压住表单，直接收掉 */
+  .auth-mascot-line { display: none; }
 }

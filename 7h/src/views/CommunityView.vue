@@ -180,6 +180,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY, SESSION_TOKEN_KEY } from '../utils/constants'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listPosts, listCategoryStats, deletePost, setPinned } from '../api/blog'
@@ -195,11 +196,11 @@ const router = useRouter()
 
 const me = ref(null)
 try {
-  me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
+  me.value = JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
 } catch {
   me.value = null
 }
-const logged = computed(() => !!localStorage.getItem('bn-token'))
+const logged = computed(() => !!localStorage.getItem(SESSION_TOKEN_KEY))
 
 const bars = ref([])          // 吧（分类 + 帖子数）
 const posts = ref([])
@@ -537,7 +538,7 @@ onMounted(() => {
 .cp-mask {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--z-panel);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -586,7 +587,7 @@ onMounted(() => {
   left: 50%;
   bottom: 56px;
   transform: translateX(-50%);
-  z-index: 95;
+  z-index: var(--z-game);
   padding: 9px 20px;
   font-size: 13px;
   color: var(--c-text);

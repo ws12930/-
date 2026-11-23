@@ -2,12 +2,13 @@
  * 文件上传接口封装。
  * 注意：这里不能手动设置 Content-Type，交给浏览器自动带 multipart boundary。
  */
+import { SESSION_TOKEN_KEY } from '../utils/constants'
 import { handleBanned, isBanned } from '../utils/session'
 
 const BASE = '/api'
 
 function getToken() {
-  return localStorage.getItem('bn-token') || ''
+  return localStorage.getItem(SESSION_TOKEN_KEY) || ''
 }
 
 /**

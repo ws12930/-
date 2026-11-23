@@ -88,6 +88,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY } from '../utils/constants'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { listPosts, listCategories, deletePost, setPinned } from '../api/blog'
@@ -119,7 +120,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize))
 const me = ref(null)
 const { state: confirmState, ask: askConfirm, confirm, close } = useConfirm()
 try {
-  me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
+  me.value = JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
 } catch {
   me.value = null
 }

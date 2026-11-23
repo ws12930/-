@@ -43,7 +43,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   position: fixed;
   inset: 0;
   /* 高于 ConfirmDialog(90) 与顶栏(30)，保证盖在页面最上层 */
-  z-index: 120;
+  z-index: var(--z-notice);
   display: flex;
   align-items: center;
   justify-content: center;

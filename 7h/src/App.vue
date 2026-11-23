@@ -5,9 +5,11 @@
     <CursorGlow />
     <Leaves />
     <router-view />
-    <!-- 后台管理是密集列表页，看板娘浮层（fixed 右下角 + 气泡）正好压在行内
-         「置顶 / 删除」按钮上，因此后台路由不渲染；其余页面保持原样。 -->
-    <Mascot v-if="!isConsole" />
+    <!-- 哪些页面显示桌宠由 mascot/config.js 的可见路由表统一决定：
+         后台管理页的浮层会压住行内「置顶 / 删除」按钮；
+         登录 / 注册 / 找回密码页左下角已有大幅立绘，再叠一个会说话的桌宠就是「两个青禾」。
+         集中成一张表，以后加页面不用再来这里补一个 v-if。 -->
+    <Mascot v-if="showMascot" />
     <!-- 账号被封禁的全局提示：任何页面、任何接口命中 40301 都会弹 -->
     <BanNotice />
   </div>
@@ -22,10 +24,11 @@ import Leaves from './components/Leaves.vue'
 import Mascot from './components/Mascot.vue'
 import BanNotice from './components/BanNotice.vue'
 import { banNotice, startBanWatch } from './utils/session'
+import { mascotVisibleOn } from './mascot/config'
 
 const route = useRoute()
 const router = useRouter()
-const isConsole = computed(() => route.name === 'admin')
+const showMascot = computed(() => mascotVisibleOn(route.name))
 
 // 被封禁时本地登录态已被清掉，这里顺手把页面送回登录页；
 // 弹窗是 fixed 的，不随路由切换消失，用户点了「我知道了」才关闭。
@@ -45,6 +48,6 @@ onMounted(startBanWatch)
 .app-shell {
   height: 100%;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-base);
 }
 </style>

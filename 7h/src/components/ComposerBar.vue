@@ -471,7 +471,7 @@ onBeforeUnmount(() => {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  z-index: 40;
+  z-index: var(--z-float);
   width: 340px;
   max-width: min(340px, 86vw);
   border: 1px solid rgba(255, 255, 255, 0.14);

@@ -80,6 +80,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY, notifySessionChanged } from '../utils/constants'
 import { reactive, ref, computed, onMounted } from 'vue'
 import { updateProfile } from '../api/social'
 import { checkinToday, doCheckin } from '../api/community'
@@ -143,7 +144,8 @@ const previewUser = computed(() => ({
 }))
 
 function saveLocal(user) {
-  localStorage.setItem('bn-user', JSON.stringify(user))
+  localStorage.setItem(SESSION_ME_KEY, JSON.stringify(user))
+    notifySessionChanged()
 }
 
 async function save() {
@@ -199,7 +201,7 @@ async function onFile(e) {
 
 onMounted(() => {
   try {
-    me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
+    me.value = JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
   } catch {
     me.value = null
   }

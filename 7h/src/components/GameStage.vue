@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
 .gs-mask {
   position: fixed;
   inset: 0;
-  z-index: 95;
+  z-index: var(--z-game);
   display: flex;
   align-items: center;
   justify-content: center;

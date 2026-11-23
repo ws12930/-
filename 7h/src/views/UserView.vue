@@ -71,6 +71,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY } from '../utils/constants'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getUserProfile, toggleFollow, listUserPosts } from '../api/social'
@@ -90,7 +91,7 @@ const error = ref('')
 
 const me = ref(null)
 try {
-  me.value = JSON.parse(localStorage.getItem('bn-user') || 'null')
+  me.value = JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
 } catch {
   me.value = null
 }
@@ -239,7 +240,7 @@ onMounted(load)
   border-radius: 999px;
   background: rgba(20, 24, 22, 0.92);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  z-index: 90;
+  z-index: var(--z-dialog);
 }
 
 .uv-sub { display: flex; align-items: center; gap: 10px; font-size: 15px; letter-spacing: 2px; margin-bottom: 12px; }

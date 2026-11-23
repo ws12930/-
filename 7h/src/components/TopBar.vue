@@ -86,6 +86,7 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY, notifySessionChanged } from '../utils/constants'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import BackButton from './BackButton.vue'
@@ -175,7 +176,7 @@ function onKeydown(e) {
 async function loadMe() {
   let cached = null
   try {
-    cached = JSON.parse(localStorage.getItem('bn-user') || 'null')
+    cached = JSON.parse(localStorage.getItem(SESSION_ME_KEY) || 'null')
   } catch {
     cached = null
   }
@@ -191,7 +192,7 @@ async function loadMe() {
     // 否则路由守卫读到的还是旧角色，刷新后依然进不去（或出不来）后台
     if (data.role && data.role !== cached.role) {
       try {
-        localStorage.setItem('bn-user', JSON.stringify({ ...cached, role: data.role }))
+        localStorage.setItem(SESSION_ME_KEY, JSON.stringify({ ...cached, role: data.role }))
       } catch {
         /* 隐私模式下写不进去，忽略即可 */
       }
@@ -286,7 +287,8 @@ function goHome() {
 function logout() {
   closeMenu()
   clearToken()
-  localStorage.removeItem('bn-user')
+  localStorage.removeItem(SESSION_ME_KEY)
+  notifySessionChanged()
   router.replace({ name: 'login' })
 }
 </script>
@@ -297,7 +299,7 @@ function logout() {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 30;
+  z-index: var(--z-sticky);
   height: 60px;
   display: flex;
   align-items: center;
@@ -465,7 +467,7 @@ function logout() {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  z-index: 40;
+  z-index: var(--z-float);
   width: 220px;
   padding: 6px;
   border: 1px solid rgba(255, 255, 255, 0.14);

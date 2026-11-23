@@ -9,6 +9,7 @@
  *
  * 后端对应错误码：40301（见 com.fenglin.blog.common.BizException#banned）。
  */
+import { SESSION_ME_KEY, SESSION_TOKEN_KEY, notifySessionChanged } from './constants'
 import { reactive } from 'vue'
 
 /** 与后端 BizException.BANNED_MESSAGE 保持一致 */
@@ -33,8 +34,9 @@ export function isBanned(data) {
  * 并发请求可能同时命中，这里做成幂等，重复调用只是重复赋值。
  */
 export function handleBanned(message) {
-  localStorage.removeItem('bn-token')
-  localStorage.removeItem('bn-user')
+  localStorage.removeItem(SESSION_TOKEN_KEY)
+  localStorage.removeItem(SESSION_ME_KEY)
+  notifySessionChanged()
   banNotice.message = message || BANNED_MESSAGE
   banNotice.visible = true
 }
@@ -50,7 +52,7 @@ const HEARTBEAT_MS = 15000
 let timer = null
 
 async function probe() {
-  const token = localStorage.getItem('bn-token')
+  const token = localStorage.getItem(SESSION_TOKEN_KEY)
   if (!token) return
   try {
     const res = await fetch('/api/auth/me', {

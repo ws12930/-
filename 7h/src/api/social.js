@@ -2,12 +2,13 @@
  * 社交接口封装：资料 / 用户主页 / 关注 / 点赞 / 私信
  * 开发期由 vite 代理 /api -> 8081
  */
+import { SESSION_TOKEN_KEY } from '../utils/constants'
 import { handleBanned, isBanned } from '../utils/session'
 
 const BASE = '/api'
 
 function getToken() {
-  return localStorage.getItem('bn-token') || ''
+  return localStorage.getItem(SESSION_TOKEN_KEY) || ''
 }
 
 function authHeaders() {

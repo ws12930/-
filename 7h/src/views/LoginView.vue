@@ -6,6 +6,7 @@
     <!-- 看板娘「青禾」立绘 -->
     <div class="auth-mascot">
       <img :src="mascotImg" alt="看板娘 青禾" />
+      <p class="auth-mascot-line">欢迎回来～我是青禾，慢慢写，好好说</p>
     </div>
 
     <div class="card panel">
@@ -66,10 +67,11 @@
 </template>
 
 <script setup>
+import { SESSION_ME_KEY, notifySessionChanged } from '../utils/constants'
 import { reactive, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { login } from '../api/auth'
-import mascotImg from '../assets/mascot/mascot-welcome.png'
+import mascotImg from '../assets/mascot/mascot-welcome.webp'
 
 const router = useRouter()
 const route = useRoute()
@@ -134,7 +136,8 @@ async function handleLogin() {
       remember: form.remember
     })
     const user = res.data
-    localStorage.setItem('bn-user', JSON.stringify(user))
+    localStorage.setItem(SESSION_ME_KEY, JSON.stringify(user))
+    notifySessionChanged()
     success.value = `欢迎回来，${user.nickname || user.username}！`
 
     if (form.remember) {
@@ -184,7 +187,7 @@ function goRegister() {
 
 .card {
   position: relative;
-  z-index: 2;
+  z-index: var(--z-raised);
   width: min(400px, 92vw);
   padding: 36px 38px 28px;
   text-align: center;
@@ -294,7 +297,7 @@ function goRegister() {
   border-radius: 20px;
   background: rgba(0, 0, 0, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  z-index: 5;
+  z-index: var(--z-auth-deco);
 }
 
 @media (max-width: 900px) {

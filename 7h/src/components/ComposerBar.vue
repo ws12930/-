@@ -17,6 +17,16 @@
       >
         📎<span class="cb-label">{{ uploading ? '上传中' : '文件' }}</span>
       </button>
+      <button
+        v-if="video"
+        type="button"
+        class="cb-btn"
+        title="上传 MP4 视频（最大 200MB）"
+        :disabled="uploading"
+        @click.stop="openVideoPicker"
+      >
+        🎬<span class="cb-label">视频</span>
+      </button>
       <span v-if="tip" class="cb-tip" :class="{ err: tipError }">{{ tip }}</span>
     </div>
 
@@ -135,6 +145,13 @@
       accept="image/jpeg,image/png,image/gif,image/webp,image/bmp"
       @change="onStickerFile"
     />
+    <input
+      ref="videoInput"
+      class="cb-file"
+      type="file"
+      accept="video/mp4,.mp4"
+      @change="onVideoChange"
+    />
   </div>
 </template>
 
@@ -152,6 +169,8 @@ const props = defineProps({
   linkMode: { type: String, default: 'markdown' },
   /** 是否显示文件上传按钮 */
   upload: { type: Boolean, default: true },
+  /** 是否显示 MP4 视频上传按钮（写文章页开启） */
+  video: { type: Boolean, default: false },
   /** 是否开启自定义表情包面板（目前只有私信页用） */
   stickers: { type: Boolean, default: false },
   /**
@@ -187,6 +206,7 @@ const uploading = ref(false)
 const tip = ref('')
 const tipError = ref(false)
 const fileInput = ref(null)
+const videoInput = ref(null)
 
 /* ===== 自定义表情包 ===== */
 const emojiTab = ref('emoji')
@@ -385,6 +405,53 @@ async function onFileChange(event) {
     const message = e.message || '上传失败'
     showTip(message, true)
     emit('error', message)
+  } finally {
+    uploading.value = false
+  }
+}
+
+/** MP4 视频拾取器 */
+function openVideoPicker() {
+  if (uploading.value) return
+  videoInput.value?.click()
+}
+
+/**
+ * 视频上传后插入 @[视频](url)：正文渲染器会把它转成 <video> 播放器。
+ * 上限与后端 UploadController.MAX_VIDEO_BYTES / multipart 配置保持一致。
+ */
+async function onVideoChange(event) {
+  const file = event.target.files && event.target.files[0]
+  // 立刻复位，保证连续选择同一个文件也能触发 change
+  event.target.value = ''
+  if (!file) return
+
+  const isMp4 = /\.mp4$/i.test(file.name) || file.type === 'video/mp4'
+  if (!isMp4) {
+    showTip('仅支持 MP4 视频', true)
+    return
+  }
+  if (file.size > 200 * 1024 * 1024) {
+    showTip('视频不能超过 200MB', true)
+    return
+  }
+
+  uploading.value = true
+  showTip('正在上传视频…')
+  try {
+    const result = await uploadFile(file)
+    insertText(blockSnippet(`@[视频](${result.url})`))
+    showTip(`已上传 ${result.name}`)
+    emit('uploaded', result)
+  } catch (e) {
+    const raw = e.message || '视频上传失败'
+    // 旧版后端还没放行 mp4，原始提示会误导用户以为前端不支持
+    const legacy = /不支持的文件类型|仅支持常见图片与文档/.test(raw)
+    const message = legacy
+      ? '后端未更新，请重启 Spring Boot 服务后重试'
+      : raw
+    showTip(legacy ? '后端未更新，请重启服务' : message, true)
+    emit('error', legacy ? `${message}（后端原提示：${raw}）` : message)
   } finally {
     uploading.value = false
   }

@@ -39,6 +39,27 @@ const html = computed(() => renderRichText(props.content || props.text))
   color: var(--c-ninja);
 }
 
+/* 视频：16:9 播放器卡片，正文里占满栏宽，评论 / 气泡里收窄 */
+.rich-text :deep(figure.rt-video) {
+  margin: 14px 0;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.rich-text :deep(figure.rt-video video) {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 480px;
+  border-radius: 6px;
+  background: #000;
+}
+.rich-text.rt-comment :deep(figure.rt-video),
+.rich-text.rt-bubble :deep(figure.rt-video) { max-width: 320px; }
+.rich-text.rt-comment :deep(figure.rt-video video),
+.rich-text.rt-bubble :deep(figure.rt-video video) { max-height: 240px; }
+
 /* 图片尺寸按场景分档。
    不再写死 max-height —— 否则长图会被压扁，配合 object-fit 还会出现黑边。 */
 .rich-text :deep(img) {

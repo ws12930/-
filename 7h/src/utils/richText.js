@@ -1,5 +1,5 @@
 /**
- * 轻量富文本渲染：支持 markdown 子集（图片 / 链接 / 粗体 / 行内代码 / 换行）。
+ * 轻量富文本渲染：支持 markdown 子集（视频 / 图片 / 链接 / 粗体 / 行内代码 / 换行）。
  *
  * 安全策略（重要）：
  * 1. 处理顺序是「先提取链接 → 再整体转义」。
@@ -47,6 +47,11 @@ function safeUrl(raw) {
 }
 
 /**
+ * 视频：@[视频](/uploads/x.mp4)，必须在链接 / 图片语法之前提取
+ */
+const VIDEO_RE = /@\[视频\]\(([^)\s]+)\)/g
+
+/**
  * 图片：![alt](/uploads/x.png)
  * 表情包额外带 `{sticker}` 后缀：![名字](/uploads/x.png){sticker}
  * 后缀只做样式标记（固定缩略图尺寸），不影响 URL 解析。
@@ -79,7 +84,16 @@ export function renderRichText(text) {
   // 先去掉控制字符，避免用户伪造占位符
   let out = String(text).replace(CONTROL_CHARS, '')
 
-  // ---- 第 1 步：在原始文本上提取图片 / 链接（此时 URL 还是原样，判断最准确）----
+  // ---- 第 1 步：在原始文本上提取视频 / 图片 / 链接（此时 URL 还是原样，判断最准确）----
+
+  // 视频先提取：标记里含 [文字](url)，晚一步就会被通用链接正则吃掉
+  out = out.replace(VIDEO_RE, (whole, url) => {
+    const safe = safeUrl(url)
+    if (!safe) return whole
+    return stash(
+      `<figure class="rt-video"><video controls preload="metadata" src="${escapeHtml(safe)}">您的浏览器不支持视频播放</video></figure>`
+    )
+  })
 
   out = out.replace(IMAGE_RE, (whole, alt, url, stickerFlag) => {
     const safe = safeUrl(url)
@@ -124,6 +138,7 @@ export function renderRichText(text) {
 export function toPlainSummary(text, maxLength = 80) {
   if (!text) return ''
   const out = String(text)
+    .replace(VIDEO_RE, '[视频]')
     .replace(IMAGE_RE, '[图片]')
     .replace(LINK_RE, '$1')
     .replace(CODE_RE, '$1')

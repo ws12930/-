@@ -47,8 +47,12 @@ public class UploadController {
     private static final Set<String> DOC_EXTENSIONS =
             Set.of("pdf", "txt", "md", "csv", "zip", "doc", "docx", "xls", "xlsx", "ppt", "pptx");
 
+    /** 视频：MP4 是浏览器通用格式，且不会当作脚本执行 */
+    private static final Set<String> VIDEO_EXTENSIONS = Set.of("mp4");
+
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
     private static final long MAX_DOC_BYTES = 20L * 1024 * 1024;
+    private static final long MAX_VIDEO_BYTES = 200L * 1024 * 1024;
 
     private static final DateTimeFormatter DATE_PATH = DateTimeFormatter.ofPattern("yyyy/MM");
 
@@ -69,14 +73,16 @@ public class UploadController {
         String extension = extensionOf(originalName);
 
         boolean image = IMAGE_EXTENSIONS.contains(extension);
-        if (!image && !DOC_EXTENSIONS.contains(extension)) {
-            throw BizException.badRequest("不支持的文件类型，仅支持常见图片与文档");
+        boolean video = VIDEO_EXTENSIONS.contains(extension);
+        if (!image && !video && !DOC_EXTENSIONS.contains(extension)) {
+            throw BizException.badRequest("不支持的文件类型，仅支持常见图片、文档与 MP4 视频");
         }
 
-        long limit = image ? MAX_IMAGE_BYTES : MAX_DOC_BYTES;
+        long limit = image ? MAX_IMAGE_BYTES : video ? MAX_VIDEO_BYTES : MAX_DOC_BYTES;
         if (file.getSize() > limit) {
+            String label = image ? "图片" : video ? "视频" : "文件";
             throw BizException.badRequest(
-                    (image ? "图片" : "文件") + "过大，上限 " + (limit / 1024 / 1024) + "MB");
+                    label + "过大，上限 " + (limit / 1024 / 1024) + "MB");
         }
 
         String datePath = LocalDate.now().format(DATE_PATH);
@@ -126,7 +132,10 @@ public class UploadController {
         return cleaned.isEmpty() ? "未命名文件" : cleaned;
     }
 
-    /** @param image true 表示前端应以图片形式内联展示，false 表示作为附件链接 */
+    /**
+     * @param image true 表示前端应以图片形式内联展示，false 表示作为附件链接
+     *              视频也走 false，由正文渲染器按 MP4 标记转为播放器
+     */
     public record UploadedFile(String url, String name, long size, boolean image) {
     }
 }

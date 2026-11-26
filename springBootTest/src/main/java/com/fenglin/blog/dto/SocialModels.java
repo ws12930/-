@@ -70,6 +70,18 @@ public final class SocialModels {
             Integer recalled) {
     }
 
+    /**
+     * 私信发送权限：非互相关注时，发送方累计最多发 {@code limit} 条。
+     * canSend=false 时 reason 给出前端要展示的提示文案。
+     */
+    public record ChatPermissionVO(
+            boolean canSend,
+            boolean mutual,
+            int sentCount,
+            int limit,
+            String reason) {
+    }
+
     /** 会话列表项：与某个用户的最近一条消息 + 未读条数 */
     public record ConversationVO(
             Long peerId,

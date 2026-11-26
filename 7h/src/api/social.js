@@ -110,6 +110,11 @@ export function listMessages(peerId, limit = 100) {
   return request(`/messages/${peerId}?limit=${limit}`)
 }
 
+/** 会话发送权限：非互关满 3 条后 canSend=false，reason 为提示文案 */
+export function getChatPermission(peerId) {
+  return request(`/messages/${peerId}/permission`)
+}
+
 /**
  * 发送私信。
  * @param {number} peerId 对方用户 id

@@ -2,11 +2,14 @@ package com.fenglin.blog.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fenglin.blog.common.BizException;
+import com.fenglin.blog.dto.SocialModels.ChatPermissionVO;
 import com.fenglin.blog.dto.SocialModels.ConversationVO;
 import com.fenglin.blog.dto.SocialModels.MessageSendRequest;
 import com.fenglin.blog.dto.SocialModels.MessageVO;
+import com.fenglin.blog.entity.Follow;
 import com.fenglin.blog.entity.Message;
 import com.fenglin.blog.entity.User;
+import com.fenglin.blog.mapper.FollowMapper;
 import com.fenglin.blog.mapper.MessageMapper;
 import com.fenglin.blog.mapper.UserMapper;
 import com.fenglin.blog.security.CurrentUserHolder;
@@ -37,12 +40,20 @@ public class MessageService {
     /** 超时的提示文案，前后端保持一致 */
     public static final String RECALL_TOO_LATE_TEXT = "消息只能在发出三分钟之内撤回";
 
+    /** 非互相关注时，我给对方累计可发的私信条数 */
+    public static final int STRANGER_MESSAGE_LIMIT = 3;
+
+    /** 达到上限时的提示文案，前后端保持一致 */
+    public static final String STRANGER_LIMIT_TEXT = "对方回关后可继续私信";
+
     private final MessageMapper messageMapper;
     private final UserMapper userMapper;
+    private final FollowMapper followMapper;
 
-    public MessageService(MessageMapper messageMapper, UserMapper userMapper) {
+    public MessageService(MessageMapper messageMapper, UserMapper userMapper, FollowMapper followMapper) {
         this.messageMapper = messageMapper;
         this.userMapper = userMapper;
+        this.followMapper = followMapper;
     }
 
     /** 会话列表：按最近一条消息倒序 */
@@ -139,9 +150,20 @@ public class MessageService {
         if (myId.equals(peerId)) {
             throw BizException.badRequest("不能给自己发消息");
         }
-        User peer = userMapper.selectById(peerId);
+        // 对收件人用户行加 FOR UPDATE：同一收件人的发送事务在此串行化，
+        // 避免两个请求同时读到 sentCount=2 而各自插入、突破 3 条上限。
+        // 行锁随事务提交释放，不同收件人之间互不阻塞。
+        User peer = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getId, peerId).last("FOR UPDATE"));
         if (peer == null) {
             throw BizException.notFound("收件人不存在");
+        }
+
+        // 陌生人限制：非互相关注时，我给对方累计最多发 3 条。
+        // 计数含已撤回/已删除的消息（按 sender/receiver 全量统计），防止靠撤回或删除绕过上限；
+        // 一旦对方回关形成互相关注，立刻放行。
+        if (!isMutual(myId, peerId) && sentCount(myId, peerId) >= STRANGER_MESSAGE_LIMIT) {
+            throw BizException.badRequest(STRANGER_LIMIT_TEXT);
         }
 
         // 引用必须落在「我和对方」这条会话里，避免通过 quoteId 窥探他人私信
@@ -170,6 +192,45 @@ public class MessageService {
         message.setCreatedAt(LocalDateTime.now());
         messageMapper.insert(message);
         return toVOs(List.of(message)).get(0);
+    }
+
+    /**
+     * 会话发送权限：给前端决定是否禁用输入框并提示「对方回关后可继续私信」。
+     * 与 send() 的拦截用同一套判定，避免前后端口径不一致。
+     */
+    public ChatPermissionVO permission(Long peerId) {
+        Long myId = CurrentUserHolder.require().userId();
+        // 与 send() 保持同一套校验：自己 / 非法 id / 不存在的用户都不能发，
+        // 否则前端据此放开输入后发送必然失败。
+        if (peerId == null || peerId <= 0 || myId.equals(peerId)) {
+            return new ChatPermissionVO(false, false, 0, STRANGER_MESSAGE_LIMIT, "不能给自己发消息");
+        }
+        if (userMapper.selectById(peerId) == null) {
+            return new ChatPermissionVO(false, false, 0, STRANGER_MESSAGE_LIMIT, "收件人不存在");
+        }
+        boolean mutual = isMutual(myId, peerId);
+        long sent = sentCount(myId, peerId);
+        boolean canSend = mutual || sent < STRANGER_MESSAGE_LIMIT;
+        String reason = canSend ? null : STRANGER_LIMIT_TEXT;
+        return new ChatPermissionVO(canSend, mutual, (int) Math.min(sent, Integer.MAX_VALUE),
+                STRANGER_MESSAGE_LIMIT, reason);
+    }
+
+    /** 我和对方是否互相关注 */
+    private boolean isMutual(Long myId, Long peerId) {
+        boolean iFollowPeer = followMapper.selectCount(new LambdaQueryWrapper<Follow>()
+                .eq(Follow::getFollowerId, myId).eq(Follow::getFolloweeId, peerId)) > 0;
+        if (!iFollowPeer) {
+            return false;
+        }
+        return followMapper.selectCount(new LambdaQueryWrapper<Follow>()
+                .eq(Follow::getFollowerId, peerId).eq(Follow::getFolloweeId, myId)) > 0;
+    }
+
+    /** 我给对方累计发了多少条（含已撤回/已删除，防止靠撤回绕过上限） */
+    private long sentCount(Long myId, Long peerId) {
+        return messageMapper.selectCount(new LambdaQueryWrapper<Message>()
+                .eq(Message::getSenderId, myId).eq(Message::getReceiverId, peerId));
     }
 
     /**

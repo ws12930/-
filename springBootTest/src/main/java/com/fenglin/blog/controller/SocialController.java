@@ -3,6 +3,7 @@ package com.fenglin.blog.controller;
 import com.fenglin.blog.common.PageResult;
 import com.fenglin.blog.common.R;
 import com.fenglin.blog.dto.BlogModels.PostVO;
+import com.fenglin.blog.dto.SocialModels.ChatPermissionVO;
 import com.fenglin.blog.dto.SocialModels.ConversationVO;
 import com.fenglin.blog.dto.SocialModels.MessageSendRequest;
 import com.fenglin.blog.dto.SocialModels.MessageVO;
@@ -113,6 +114,13 @@ public class SocialController {
     public R<List<MessageVO>> history(@PathVariable Long peerId,
                                       @RequestParam(defaultValue = "100") long limit) {
         return R.ok(messageService.history(peerId, limit));
+    }
+
+    /** 当前会话是否还能发送：非互关满 3 条后禁用输入并提示对方回关 */
+    @RequireAuth
+    @GetMapping("/messages/{peerId}/permission")
+    public R<ChatPermissionVO> permission(@PathVariable Long peerId) {
+        return R.ok(messageService.permission(peerId));
     }
 
     @RequireAuth

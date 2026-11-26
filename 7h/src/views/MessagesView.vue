@@ -107,6 +107,12 @@
           </div>
 
           <template v-else>
+            <!-- 陌生人私信上限提示：非互关累计发满 3 条后显示 -->
+            <div v-if="sendBlocked" class="ms-limit-banner">
+              <span class="ms-limit-ico">🔒</span>
+              <span>{{ chatPermission.reason || '对方回关后可继续私信' }}</span>
+            </div>
+
             <div class="ms-stream" ref="streamEl" @dblclick="onStreamDblclick">
               <div v-if="!messages.length" class="empty-state">
                 <span class="es-ico">🫧</span>
@@ -168,7 +174,11 @@
               </div>
             </div>
 
-            <div class="ms-composer">
+            <div v-if="sendBlocked" class="ms-composer ms-composer-blocked">
+              <p class="ms-blocked-note">已向对方发送 {{ chatPermission.sentCount }} 条私信，达到陌生人上限。对方回关你之后，刷新即可继续私信。</p>
+              <button class="ms-recheck" type="button" @click="open(currentPeer)">刷新状态</button>
+            </div>
+            <div v-else class="ms-composer">
               <div v-if="quoting" class="ms-quote-to">
                 <span class="ms-quote-to-name">引用 {{ quoting.senderName }}</span>
                 <span class="ms-quote-to-text">{{ quoting.preview }}</span>
@@ -226,9 +236,11 @@
 <script setup>
 import { SESSION_ME_KEY } from '../utils/constants'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   listConversations,
   listMessages,
+  getChatPermission,
   sendMessage,
   searchUsers,
   deleteMessage,
@@ -243,10 +255,16 @@ import ComposerBar from '../components/ComposerBar.vue'
 import { toPlainSummary } from '../utils/richText'
 import { addSticker } from '../utils/stickers'
 
+const route = useRoute()
+
 const conversations = ref([])
 const followedPeople = ref([])
 const messages = ref([])
 const currentPeer = ref(null)
+/** 当前会话的发送权限：非互关满 3 条后 canSend=false */
+const chatPermission = ref(null)
+/** 是否已达陌生人私信上限（用于禁用输入与提示） */
+const sendBlocked = computed(() => !!chatPermission.value && !chatPermission.value.canSend)
 const draft = ref('')
 const inputEl = ref(null)
 const streamEl = ref(null)
@@ -453,31 +471,68 @@ async function loadFollowing() {
 async function open(peerId) {
   currentPeer.value = peerId
   messages.value = []
+  chatPermission.value = null
   quoting.value = null
   confirming.value = null
   try {
     const res = await listMessages(peerId)
+    // 切换会话时旧请求晚到会覆盖新会话，丢弃过期响应
+    if (currentPeer.value !== peerId) return
     messages.value = res.data || []
     await nextTick()
     if (streamEl.value) streamEl.value.scrollTop = streamEl.value.scrollHeight
   } catch (e) {
-    error.value = e.message || '加载失败'
+    if (currentPeer.value === peerId) error.value = e.message || '加载失败'
   }
+  // 发送权限与聊天记录并行无关，单独拉取：失败不应影响记录展示
+  try {
+    const perm = await getChatPermission(peerId)
+    if (currentPeer.value === peerId) chatPermission.value = perm.data || null
+  } catch {
+    if (currentPeer.value === peerId) chatPermission.value = null
+  }
+}
+
+/** 发送受限时给出的统一提示（后端文案为准，前端兜底一份） */
+const LIMIT_TEXT = '对方回关后可继续私信'
+
+function handleSendError(e, peerId) {
+  const msg = e?.message || '发送失败'
+  // 命中陌生人上限：立即禁用输入并清空草稿；用宽松匹配避免后端文案微调后失配。
+  // 字段补全，避免模板读 sentCount 时渲染成 undefined。
+  if (msg.includes('回关')) {
+    const cur = chatPermission.value
+    chatPermission.value = {
+      canSend: false,
+      mutual: cur?.mutual ?? false,
+      sentCount: cur?.sentCount ?? 0,
+      limit: cur?.limit ?? 3,
+      reason: msg
+    }
+    draft.value = ''
+  }
+  error.value = msg
+  // 权限可能刚变化（对方回关/取关），静默刷新一次；仅当会话仍是当前打开的才写入
+  getChatPermission(peerId)
+    .then((perm) => { if (currentPeer.value === peerId) chatPermission.value = perm.data || chatPermission.value })
+    .catch(() => {})
 }
 
 async function send() {
   const content = draft.value.trim()
-  if (!content || !currentPeer.value) return
+  // sending 守卫：按钮 disabled 只挡鼠标，Ctrl+Enter 连按会绕过，这里兜底防重复发送
+  if (!content || !currentPeer.value || sending.value) return
+  const peerId = currentPeer.value
   sending.value = true
   error.value = ''
   try {
-    await sendMessage(currentPeer.value, content, quoting.value ? quoting.value.id : null)
+    await sendMessage(peerId, content, quoting.value ? quoting.value.id : null)
     draft.value = ''
     quoting.value = null
-    await open(currentPeer.value)
+    await open(peerId)
     await loadConversations()
   } catch (e) {
-    error.value = e.message || '发送失败'
+    handleSendError(e, peerId)
   } finally {
     sending.value = false
   }
@@ -486,19 +541,20 @@ async function send() {
 /** 表情包「立即发送」：点一下表情包直接发出去，不经过输入框 */
 async function sendStickerNow(sticker) {
   if (!sticker?.url || !currentPeer.value || sending.value) return
+  const peerId = currentPeer.value
   sending.value = true
   error.value = ''
   try {
     // {sticker} 后缀让 RichText 按固定 96×96 缩略图渲染，不再撑满气泡
     await sendMessage(
-      currentPeer.value,
+      peerId,
       `![${sticker.name || '表情'}](${sticker.url}){sticker}`,
       null
     )
-    await open(currentPeer.value)
+    await open(peerId)
     await loadConversations()
   } catch (e) {
-    error.value = e.message || '发送失败'
+    handleSendError(e, peerId)
   } finally {
     sending.value = false
   }
@@ -549,11 +605,24 @@ function onKeydown(event) {
   if (event.key === 'Escape') closePreview()
 }
 
+/** 从他人主页「私信」跳过来时，按 ?peer=用户id 自动打开会话 */
+async function openPeerFromQuery() {
+  const raw = route.query.peer
+  const peerId = Number(raw)
+  if (!raw || !Number.isInteger(peerId) || peerId <= 0 || peerId === me.value?.id) return
+  await open(peerId)
+  await loadConversations()
+}
+
 onMounted(() => {
   loadConversations()
   loadFollowing()
+  openPeerFromQuery()
   document.addEventListener('keydown', onKeydown)
 })
+
+// 已停留在私信页时，query 变化（如从会话里再点进他人主页后返回）也能响应
+watch(() => route.query.peer, openPeerFromQuery)
 
 onBeforeUnmount(() => {
   clearTimeout(toastTimer)
@@ -767,6 +836,44 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .ms-quote-cancel:hover { color: var(--c-text); }
+
+/* ===== 陌生人私信上限：提示条 + 禁用输入 ===== */
+.ms-limit-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-bottom: 10px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  color: var(--c-acid);
+  border: 1px solid rgba(217, 255, 77, 0.3);
+  border-radius: 8px;
+  background: rgba(217, 255, 77, 0.06);
+}
+.ms-limit-ico { font-size: 14px; }
+.ms-composer-blocked {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.ms-blocked-note { flex: 1; margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--c-dim); }
+.ms-recheck {
+  flex: none;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--c-mint);
+  background: transparent;
+  border: 1px solid rgba(150, 182, 168, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.ms-recheck:hover { background: rgba(150, 182, 168, 0.12); }
 
 .ms-composer { margin-top: 12px; }
 .ms-input {

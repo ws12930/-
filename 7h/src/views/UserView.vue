@@ -34,6 +34,9 @@
             >
               {{ followLabel(profile) }}
             </button>
+            <button class="uv-chat" type="button" title="给 TA 发私信" @click="openChat">
+              私信
+            </button>
             <button class="uv-report" type="button" title="举报这个用户" @click="openReport">
               举报
             </button>
@@ -167,6 +170,17 @@ function showToast(message) {
   toastTimer = setTimeout(() => (toast.value = ''), 2600)
 }
 
+/** 私信：跳到私信页并自动打开与该用户的会话 */
+function openChat() {
+  const target = { name: 'messages', query: { peer: userId.value } }
+  if (!me.value) {
+    // 未登录时带上私信页的完整路径，登录后直接进会话，而不是退回主页再点一次
+    router.push({ name: 'login', query: { redirect: router.resolve(target).fullPath } })
+    return
+  }
+  router.push(target)
+}
+
 function openReport() {
   if (!me.value) {
     router.push({ name: 'login', query: { redirect: route.fullPath } })
@@ -216,7 +230,8 @@ onMounted(load)
 }
 .uv-banned-note { margin-top: 9px; font-size: 11.5px; line-height: 1.6; color: #ff8a8a; }
 
-/* 举报：低饱和描边，鼠标移上去才变暖，避免抢关注的视觉权重 */
+/* 私信 / 举报：低饱和描边，hover 才点亮，避免抢关注的视觉权重 */
+.uv-chat,
 .uv-report {
   padding: 5px 11px;
   font-size: 12px;
@@ -226,7 +241,12 @@ onMounted(load)
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.uv-chat:hover {
+  color: var(--c-mint);
+  border-color: rgba(150, 182, 168, 0.45);
+  background: rgba(150, 182, 168, 0.08);
 }
 .uv-report:hover { color: #ff8a8a; border-color: rgba(255, 138, 138, 0.4); }
 

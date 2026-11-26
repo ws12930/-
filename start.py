@@ -47,6 +47,10 @@ DIST_DIR = os.path.join(BASE_DIR, "7h", "dist")
 FRONT_DIR = os.path.join(BASE_DIR, "7h")
 BACKEND_DIR = os.path.join(BASE_DIR, "springBootTest")
 DB_SQL = os.path.join(BACKEND_DIR, "fenglin_blog.sql")
+# 增量脚本：幂等，每次启动都执行，保证已有库也能拿到新表 / 新字段。
+# 用显式白名单，绝不扫描目录——db/ 下还有 rollback.sql（删库）和 schema.sql（全量建表），误执行会出事。
+INCREMENTAL_SQL_DIR = os.path.join(BACKEND_DIR, "src", "main", "resources", "db")
+INCREMENTAL_SQL_FILES = ["schema_community.sql"]
 BACKEND_LOG = os.path.join(BACKEND_DIR, "log", "startup.log")
 
 # ---------------------------------------------------------------- 访问地址
@@ -262,6 +266,8 @@ def ensure_database():
 
     exists = mysql_call(mysql, "SHOW DATABASES LIKE '%s'" % DB_NAME)
     if (exists.stdout or "").strip():
+        # 已有库：补跑增量脚本（幂等），让老库也能拿到新表
+        apply_incremental_schemas(mysql)
         return True
 
     log("数据库 %s 不存在，正在建库并导入初始化脚本..." % DB_NAME)
@@ -283,7 +289,29 @@ def ensure_database():
         warn("导入 SQL 失败：%s" % (imported.stderr or "").strip()[-300:])
         return True
     log("数据库初始化完成（%s）" % DB_NAME)
+    apply_incremental_schemas(mysql)
     return True
+
+
+def apply_incremental_schemas(mysql):
+    """执行 db 目录下的增量脚本（幂等，失败只告警不中断启动）。"""
+    if not os.path.isdir(INCREMENTAL_SQL_DIR):
+        return
+    for name in INCREMENTAL_SQL_FILES:
+        path = os.path.join(INCREMENTAL_SQL_DIR, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as fh:
+                result = subprocess.run(
+                    [mysql, "-h", DB_HOST, "-P", str(DB_PORT), "-u", DB_USER,
+                     "--password=" + DB_PASSWORD, "--default-character-set=utf8mb4", DB_NAME],
+                    stdin=fh, capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", timeout=120)
+            if result.returncode != 0:
+                warn("增量脚本 %s 执行失败：%s" % (name, (result.stderr or "").strip()[-200:]))
+        except Exception as exc:  # noqa: BLE001 - 迁移失败不应阻断启动
+            warn("增量脚本 %s 执行异常：%s" % (name, exc))
 
 
 # ---------------------------------------------------------------- 上传目录迁移

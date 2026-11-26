@@ -72,6 +72,38 @@ export function updateBa(id, name, description) {
   return request(`/categories/${id}`, { method: 'PUT', body: { name, description } })
 }
 
+/** 解散吧：仅吧主或管理员，帖子保留、吧下架 */
+export function dissolveBa(id) {
+  return request(`/categories/${id}`, { method: 'DELETE' })
+}
+
+/* ==================== 不感兴趣 ==================== */
+
+/** 我屏蔽的帖子 / 吧：{ postIds, baIds, posts, bas } */
+export function listDislikes() {
+  return request('/dislikes')
+}
+
+/** 标记帖子不感兴趣（幂等） */
+export function dislikePost(postId) {
+  return request(`/dislikes/posts/${postId}`, { method: 'POST' })
+}
+
+/** 撤销帖子不感兴趣 */
+export function undoDislikePost(postId) {
+  return request(`/dislikes/posts/${postId}`, { method: 'DELETE' })
+}
+
+/** 标记整吧不感兴趣（幂等） */
+export function dislikeBa(categoryId) {
+  return request(`/dislikes/bas/${categoryId}`, { method: 'POST' })
+}
+
+/** 撤销整吧不感兴趣 */
+export function undoDislikeBa(categoryId) {
+  return request(`/dislikes/bas/${categoryId}`, { method: 'DELETE' })
+}
+
 /* ==================== 举报 ==================== */
 
 /** 举报内容：payload = { targetType: POST|COMMENT|USER, targetId, reason, detail } */

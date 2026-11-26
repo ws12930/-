@@ -23,9 +23,12 @@
             {{ checkin.checked ? '今日已签到' : (checking ? '签到中…' : '签到 +5') }}
           </button>
         </div>
-        <button class="g-btn g-btn-sm cp-create-btn" type="button" @click="openCreate">
-          ＋ 创建吧
-        </button>
+        <div class="cp-status-actions">
+          <button v-if="logged" class="g-btn g-btn-sm" type="button" @click="openBlocked">屏蔽管理</button>
+          <button class="g-btn g-btn-sm cp-create-btn" type="button" @click="openCreate">
+            ＋ 创建吧
+          </button>
+        </div>
       </div>
 
       <!-- 吧导航：分类即吧 -->
@@ -38,23 +41,34 @@
         >
           全部
         </button>
-        <button
-          v-for="ba in bars"
-          :key="ba.id"
-          class="ba-chip"
-          :class="{ on: categoryId === String(ba.id), mine: isMyBa(ba) }"
-          type="button"
-          :title="ba.ownerName ? `吧主：${ba.ownerName}` : '站点分类'"
-          @click="switchBa(String(ba.id))"
-        >
-          <span v-if="ba.ownerName" class="ba-crown">👑</span>{{ ba.name }}<span class="ba-cnt">{{ ba.count }}</span>
-        </button>
+        <div v-for="ba in bars" :key="ba.id" class="ba-chip-wrap">
+          <button
+            class="ba-chip"
+            :class="{ on: categoryId === String(ba.id), mine: isMyBa(ba) }"
+            type="button"
+            :title="ba.ownerName ? `吧主：${ba.ownerName}` : '站点分类'"
+            @click="switchBa(String(ba.id))"
+          >
+            <span v-if="ba.ownerName" class="ba-crown">👑</span>{{ ba.name }}<span class="ba-cnt">{{ ba.count }}</span>
+          </button>
+          <button
+            v-if="logged && !isMyBa(ba)"
+            class="ba-hide"
+            type="button"
+            title="不感兴趣：从我的广场隐藏这个吧"
+            :disabled="managing"
+            @click="hideBa(ba)"
+          >×</button>
+        </div>
       </nav>
 
       <!-- 当前吧管理条：吧主可见 -->
       <div v-if="currentBa && isMyBa(currentBa)" class="cp-manage">
         <span class="cp-manage-hint">你是『{{ currentBa.name }}』的吧主，可置顶或删除本吧帖子</span>
-        <button class="mini-btn" type="button" @click="openEdit">编辑吧简介</button>
+        <div class="cp-manage-actions">
+          <button class="mini-btn" type="button" @click="openEdit">编辑吧简介</button>
+          <button class="mini-btn danger" type="button" :disabled="managing" @click="dissolveCurrentBa">解散该吧</button>
+        </div>
       </div>
 
       <!-- 排序 + 搜索 -->
@@ -120,14 +134,24 @@
             </div>
           </div>
 
-          <!-- 吧主管理：置顶 / 删除本吧帖子 -->
-          <div v-if="currentBa && isMyBa(currentBa)" class="tb-manage" @click.stop>
-            <button class="mini-btn" type="button" :disabled="managing" @click="togglePin(p)">
-              {{ p.pinned ? '取消置顶' : '置顶' }}
-            </button>
-            <button class="mini-btn danger" type="button" :disabled="managing" @click="removePost(p)">
-              删除
-            </button>
+          <!-- 不感兴趣：仅登录用户可见，隐藏该帖（可撤销） -->
+          <div v-if="logged" class="tb-actions" @click.stop>
+            <button
+              class="tb-dislike"
+              type="button"
+              title="不感兴趣：从我的广场隐藏这篇帖子"
+              :disabled="managing"
+              @click="hidePost(p)"
+            >不感兴趣</button>
+            <!-- 吧主管理：置顶 / 删除本吧帖子 -->
+            <div v-if="currentBa && isMyBa(currentBa)" class="tb-manage">
+              <button class="mini-btn" type="button" :disabled="managing" @click="togglePin(p)">
+                {{ p.pinned ? '取消置顶' : '置顶' }}
+              </button>
+              <button class="mini-btn danger" type="button" :disabled="managing" @click="removePost(p)">
+                删除
+              </button>
+            </div>
           </div>
         </li>
       </ul>
@@ -173,7 +197,41 @@
       </div>
     </div>
 
+    <!-- 屏蔽管理：查看并恢复已标记不感兴趣的帖子 / 吧 -->
+    <div v-if="blockDialog" class="cp-mask" @click.self="closeBlockDialog">
+      <div class="panel cp-dialog cp-block-dialog">
+        <h3 class="cp-dialog-title grad-text">屏 蔽 管 理</h3>
+        <p class="cp-dialog-note">这里的内容已对你的广场隐藏，点「恢复」即可重新显示。</p>
+        <div v-if="blockLoading" class="cp-block-empty">加载中…</div>
+        <template v-else>
+          <div class="cp-block-group">
+            <p class="cp-block-label">不感兴趣的吧（{{ blocked.bas.length }}）</p>
+            <div v-if="!blocked.bas.length" class="cp-block-empty">暂无</div>
+            <div v-for="ba in blocked.bas" :key="ba.id" class="cp-block-row">
+              <span class="cp-block-name">{{ ba.name }}</span>
+              <button class="mini-btn" type="button" :disabled="managing" @click="restoreBa(ba)">恢复</button>
+            </div>
+          </div>
+          <div class="cp-block-group">
+            <p class="cp-block-label">不感兴趣的帖子（{{ blocked.posts.length }}）</p>
+            <div v-if="!blocked.posts.length" class="cp-block-empty">暂无</div>
+            <div v-for="p in blocked.posts" :key="p.id" class="cp-block-row">
+              <span class="cp-block-name">{{ p.title || '（无标题）' }}</span>
+              <button class="mini-btn" type="button" :disabled="managing" @click="restorePost(p)">恢复</button>
+            </div>
+          </div>
+        </template>
+        <div class="cp-dialog-actions">
+          <button class="g-btn g-btn-sm cp-cancel" type="button" @click="closeBlockDialog">关 闭</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="toast" class="cp-toast">{{ toast }}</div>
+    <div v-if="undo" class="cp-toast cp-undo">
+      <span>{{ undo.message }}</span>
+      <button class="cp-undo-btn" type="button" @click="doUndo">撤销</button>
+    </div>
 
     <ConfirmDialog :state="confirmState" @confirm="confirm" @close="close" />
   </div>
@@ -184,7 +242,10 @@ import { SESSION_ME_KEY, SESSION_TOKEN_KEY } from '../utils/constants'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listPosts, listCategoryStats, deletePost, setPinned } from '../api/blog'
-import { createBa, updateBa, checkinToday, doCheckin } from '../api/community'
+import {
+  createBa, updateBa, dissolveBa, checkinToday, doCheckin,
+  listDislikes, dislikePost, undoDislikePost, dislikeBa, undoDislikeBa
+} from '../api/community'
 import TopBar from '../components/TopBar.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 import Pager from '../components/Pager.vue'
@@ -297,6 +358,145 @@ function showToast(message) {
   toast.value = message
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = ''), 2600)
+}
+
+/* ================= 不感兴趣 / 屏蔽管理 ================= */
+const undo = ref(null)          // { message, action: async () => {} }
+let undoTimer = null
+
+function showUndo(message, action) {
+  undo.value = { message, action }
+  clearTimeout(undoTimer)
+  undoTimer = setTimeout(() => (undo.value = null), 6000)
+}
+
+function clearUndo() {
+  clearTimeout(undoTimer)
+  undo.value = null
+}
+
+async function doUndo() {
+  const action = undo.value?.action
+  clearUndo()
+  if (action) await action()
+}
+
+/** 移除列表中的某条帖子并同步分页总数 / 总页数 */
+function dropPostFromList(postId) {
+  posts.value = posts.value.filter((p) => p.id !== postId)
+  if (page.value.total > 0) page.value.total -= 1
+  // 末页最后一条被移除后，页数要收缩，否则 Pager 仍可跳到空白页
+  page.value.pages = Math.max(1, Math.ceil(page.value.total / page.value.size))
+  if (page.value.current > page.value.pages) {
+    load(page.value.pages)
+  }
+}
+
+async function hidePost(p) {
+  if (managing.value) return
+  managing.value = true
+  try {
+    await dislikePost(p.id)
+    dropPostFromList(p.id)
+    showUndo('已减少此类内容', async () => {
+      try {
+        await undoDislikePost(p.id)
+        await load(page.value.current)
+        showToast('已撤销')
+      } catch (e) {
+        showToast(e.message || '撤销失败')
+      }
+    })
+  } catch (e) {
+    showToast(e.message || '操作失败')
+  } finally {
+    managing.value = false
+  }
+}
+
+async function hideBa(ba) {
+  if (managing.value) return
+  managing.value = true
+  try {
+    await dislikeBa(ba.id)
+    bars.value = bars.value.filter((b) => b.id !== ba.id)
+    // 若正在浏览被屏蔽的吧，切回"全部"；否则该吧的帖子可能就在当前列表里，都要刷新信息流
+    if (categoryId.value === String(ba.id)) {
+      categoryId.value = ''
+    }
+    await load(1)
+    showUndo(`已屏蔽『${ba.name}』`, async () => {
+      try {
+        await undoDislikeBa(ba.id)
+        await loadBars()
+        await load(1)
+        showToast('已撤销')
+      } catch (e) {
+        showToast(e.message || '撤销失败')
+      }
+    })
+  } catch (e) {
+    showToast(e.message || '操作失败')
+  } finally {
+    managing.value = false
+  }
+}
+
+const blockDialog = ref(false)
+const blockLoading = ref(false)
+const blocked = ref({ posts: [], bas: [] })
+
+async function openBlocked() {
+  if (!logged.value) return
+  blockDialog.value = true
+  blockLoading.value = true
+  try {
+    const res = await listDislikes()
+    blocked.value = {
+      posts: res.data?.posts || [],
+      bas: res.data?.bas || []
+    }
+  } catch (e) {
+    showToast(e.message || '加载屏蔽列表失败')
+  } finally {
+    blockLoading.value = false
+  }
+}
+
+function closeBlockDialog() {
+  if (managing.value) return
+  blockDialog.value = false
+}
+
+async function restorePost(p) {
+  if (managing.value) return
+  managing.value = true
+  try {
+    await undoDislikePost(p.id)
+    blocked.value.posts = blocked.value.posts.filter((x) => x.id !== p.id)
+    await load(page.value.current)
+    showToast('已恢复该帖子')
+  } catch (e) {
+    showToast(e.message || '恢复失败')
+  } finally {
+    managing.value = false
+  }
+}
+
+async function restoreBa(ba) {
+  if (managing.value) return
+  managing.value = true
+  try {
+    await undoDislikeBa(ba.id)
+    blocked.value.bas = blocked.value.bas.filter((x) => x.id !== ba.id)
+    await loadBars()
+    await load(page.value.current)
+    showToast('已恢复该吧')
+  } catch (e) {
+    showToast(e.message || '恢复失败')
+  } finally {
+    managing.value = false
+  }
 }
 
 async function loadCheckin() {
@@ -438,6 +638,33 @@ function removePost(p) {
   })
 }
 
+/** 解散当前吧：二次确认，软下架（帖子保留） */
+function dissolveCurrentBa() {
+  if (managing.value || !currentBa.value) return
+  const ba = currentBa.value
+  askConfirm({
+    title: '解 散 该 吧',
+    message: `确定解散「${ba.name}」吗？`,
+    detail: '解散后该吧将从广场导航移除，吧内帖子仍会保留、可继续访问。此操作不可恢复。',
+    confirmText: '解 散',
+    danger: true,
+    onConfirm: async () => {
+      managing.value = true
+      try {
+        await dissolveBa(ba.id)
+        categoryId.value = ''       // 切回"全部"，避免停留在已解散的吧
+        showToast('吧已解散')
+        await loadBars()
+        await load(1)
+      } catch (e) {
+        showToast(e.message || '解散失败')
+      } finally {
+        managing.value = false
+      }
+    }
+  })
+}
+
 onMounted(() => {
   loadBars()
   loadCheckin()
@@ -491,10 +718,39 @@ onMounted(() => {
 .cp-streak { font-size: 12px; color: var(--c-acid); }
 .cp-checkin-btn { padding: 4px 12px; font-size: 12px; }
 .cp-create-btn { padding: 6px 14px; font-size: 12px; }
+.cp-status-actions { display: flex; align-items: center; gap: 8px; }
+.cp-status-actions .g-btn { padding: 6px 12px; font-size: 12px; }
 
 /* 吧主标识 */
 .ba-chip.mine { border-color: rgba(217, 255, 77, 0.34); }
 .ba-crown { font-size: 11px; margin-right: 2px; }
+
+/* 吧 chip 容器 + 「不感兴趣」小按钮 */
+.ba-chip-wrap { position: relative; display: inline-flex; }
+.ba-hide {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--c-dim);
+  background: rgba(20, 24, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.45; /* 触屏无 hover，默认半透明可见 */
+  transition: opacity 0.15s;
+}
+.ba-chip-wrap:hover .ba-hide,
+.ba-hide:focus { opacity: 1; }
+.ba-hide:hover { color: #ff9d9d; border-color: rgba(255, 157, 157, 0.5); }
+.ba-hide:disabled { cursor: not-allowed; }
+
+/* 吧主管理条的按钮组 */
+.cp-manage-actions { display: flex; align-items: center; gap: 8px; }
 
 .cp-manage {
   display: flex;
@@ -511,13 +767,42 @@ onMounted(() => {
   background: rgba(217, 255, 77, 0.06);
 }
 
+/* 帖子操作区：不感兴趣 + 吧主管理 */
+.tb-actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  align-self: center;
+  margin-left: 8px;
+}
+.tb-dislike {
+  padding: 4px 9px;
+  font-size: 11px;
+  color: var(--c-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.15s;
+}
+.tb-item:hover .tb-dislike,
+.tb-dislike:focus { opacity: 1; }
+.tb-dislike:hover {
+  color: #ff9d9d;
+  border-color: rgba(255, 157, 157, 0.3);
+  background: rgba(255, 157, 157, 0.06);
+}
+.tb-dislike:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* 帖子上的吧主操作 */
 .tb-manage {
   display: flex;
   flex: none;
   gap: 6px;
-  align-self: center;
-  margin-left: 8px;
+  align-self: flex-end;
 }
 
 .tb-manage .mini-btn {
@@ -597,6 +882,65 @@ onMounted(() => {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
   pointer-events: none;
 }
+.cp-undo {
+  bottom: 104px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  pointer-events: auto;
+}
+.cp-undo-btn {
+  padding: 3px 12px;
+  font-size: 12px;
+  color: var(--c-ninja);
+  background: transparent;
+  border: 1px solid rgba(150, 182, 168, 0.5);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.cp-undo-btn:hover { color: #fff; border-color: var(--c-ninja); }
+
+/* 屏蔽管理弹窗 */
+.cp-block-dialog { width: min(480px, 100%); max-height: 78vh; overflow-y: auto; }
+.cp-block-group { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.cp-block-label {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-ninja);
+  letter-spacing: 0.5px;
+}
+.cp-block-empty { padding: 8px 0; font-size: 12px; color: var(--c-dim); }
+.cp-block-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+.cp-block-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cp-block-row .mini-btn {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--c-text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cp-block-row .mini-btn:hover { border-color: var(--c-ninja); }
+.cp-block-row .mini-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cp-dialog-actions { margin-top: 4px; }
 .ba-chip {
   display: inline-flex;
   align-items: center;

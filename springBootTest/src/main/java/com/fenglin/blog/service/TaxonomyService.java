@@ -73,9 +73,10 @@ public class TaxonomyService {
         if (existsName(trimmed, null)) {
             throw BizException.badRequest("同名的吧已经存在了");
         }
-        // 前端提示「每人最多创建 3 个吧」
+        // 前端提示「每人最多创建 3 个吧」；已解散（status=0）的不占名额
         Long owned = categoryMapper.selectCount(new LambdaQueryWrapper<Category>()
-                .eq(Category::getOwnerId, userId));
+                .eq(Category::getOwnerId, userId)
+                .eq(Category::getStatus, 1));
         if (owned != null && owned >= MAX_BA_PER_USER) {
             throw BizException.badRequest("每人最多创建 " + MAX_BA_PER_USER + " 个吧");
         }
@@ -113,8 +114,32 @@ public class TaxonomyService {
         categoryMapper.updateById(category);
     }
 
+    /**
+     * 解散吧：仅吧主本人或管理员可操作。
+     *
+     * <p>采用软下架（status=0）：吧从社区导航消失，但帖子仍在、详情仍可访问，
+     * 详情页仍按 category_id 查到原吧名。不物理删行，避免旧帖子变成"无吧"。
+     */
+    @Transactional
+    public void dissolveCategory(long id, CurrentUser user) {
+        Category category = categoryMapper.selectById(id);
+        if (category == null) {
+            throw BizException.notFound("这个吧不存在");
+        }
+        if (!user.isAdmin() && !Objects.equals(category.getOwnerId(), user.userId())) {
+            throw BizException.forbidden("只有吧主才能解散这个吧");
+        }
+        if (category.getStatus() != null && category.getStatus() == 0) {
+            return; // 已解散，幂等
+        }
+        category.setStatus(0);
+        categoryMapper.updateById(category);
+    }
+
     private boolean existsName(String name, Long excludeId) {
-        LambdaQueryWrapper<Category> wrapper = new LambdaQueryWrapper<Category>().eq(Category::getName, name);
+        LambdaQueryWrapper<Category> wrapper = new LambdaQueryWrapper<Category>()
+                .eq(Category::getName, name)
+                .eq(Category::getStatus, 1); // 已解散的吧不占用同名
         if (excludeId != null) {
             wrapper.ne(Category::getId, excludeId);
         }

@@ -61,11 +61,12 @@ public class PostService {
     private final LikeService likeService;
     private final LevelService levelService;
     private final FollowMapper followMapper;
+    private final DislikeService dislikeService;
 
     public PostService(PostMapper postMapper, CategoryMapper categoryMapper, TagMapper tagMapper,
                        PostTagMapper postTagMapper, CommentMapper commentMapper,
                        PostLikeMapper postLikeMapper, UserMapper userMapper, LikeService likeService,
-                       LevelService levelService, FollowMapper followMapper) {
+                       LevelService levelService, FollowMapper followMapper, DislikeService dislikeService) {
         this.postMapper = postMapper;
         this.categoryMapper = categoryMapper;
         this.tagMapper = tagMapper;
@@ -76,6 +77,7 @@ public class PostService {
         this.likeService = likeService;
         this.levelService = levelService;
         this.followMapper = followMapper;
+        this.dislikeService = dislikeService;
     }
 
     /* ================= 读 ================= */
@@ -102,6 +104,7 @@ public class PostService {
             }
             query.in(Post::getId, postIds);
         }
+        applyDislikeFilter(query);
         if ("hot".equalsIgnoreCase(sort)) {
             // 固定字符串拼接（无用户输入）。回复数不在本表，用子查询统计未删除评论
             query.last("ORDER BY pinned DESC, (view_count + like_count * 5 + "
@@ -136,6 +139,7 @@ public class PostService {
                 .ne(Post::getStatus, DRAFT)
                 .orderByDesc(Post::getPublishedAt)
                 .orderByDesc(Post::getId);
+        applyDislikeFilter(query);
         return toPageResult(postMapper.selectPage(pageOf(current, size), query));
     }
 
@@ -159,9 +163,14 @@ public class PostService {
                 }
             }
         }
+        List<Long> hiddenBaIds = dislikeService.dislikedBaIds();
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Category c : categoryMapper.selectList(
-                new LambdaQueryWrapper<Category>().orderByAsc(Category::getSortOrder))) {
+        for (Category c : categoryMapper.selectList(new LambdaQueryWrapper<Category>()
+                .eq(Category::getStatus, 1)  // 已解散（status=0）的吧不再出现在导航
+                .orderByAsc(Category::getSortOrder))) {
+            if (!hiddenBaIds.isEmpty() && hiddenBaIds.contains(c.getId())) {
+                continue; // 当前用户标记「不感兴趣」的吧，从导航隐藏
+            }
             // 用 HashMap 而不是 Map.of：吧主可能为空（系统内置分类），Map.of 不接受 null 值
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", c.getId());
@@ -252,6 +261,9 @@ public class PostService {
         if (category == null) {
             throw BizException.badRequest("所选分类不存在");
         }
+        if (category.getStatus() != null && category.getStatus() == 0) {
+            throw BizException.badRequest("该吧已解散，不能发帖");
+        }
 
         String status = normalizeStatus(request.status());
         LocalDateTime now = LocalDateTime.now();
@@ -288,6 +300,12 @@ public class PostService {
         Category category = categoryMapper.selectById(request.categoryId());
         if (category == null) {
             throw BizException.badRequest("所选分类不存在");
+        }
+        // 允许继续编辑"已在已解散吧里"的旧帖，但禁止把帖子搬进已解散的吧
+        boolean movingIntoDissolved = category.getStatus() != null && category.getStatus() == 0
+                && !category.getId().equals(post.getCategoryId());
+        if (movingIntoDissolved) {
+            throw BizException.badRequest("该吧已解散，不能把文章移入");
         }
 
         String status = normalizeStatus(request.status());
@@ -357,6 +375,24 @@ public class PostService {
         Category category = categoryMapper.selectById(post.getCategoryId());
         return category != null && category.getOwnerId() != null
                 && category.getOwnerId().equals(current.userId());
+    }
+
+    /**
+     * 应用当前用户的「不感兴趣」过滤：屏蔽指定帖子 + 屏蔽整吧（该吧所有帖子）。
+     * 游客没有屏蔽记录，两个集合都为空，此时 notIn 条件会被 MyBatis-Plus 跳过。
+     */
+    private void applyDislikeFilter(LambdaQueryWrapper<Post> query) {
+        List<Long> hiddenPostIds = dislikeService.dislikedPostIds();
+        if (!hiddenPostIds.isEmpty()) {
+            query.notIn(Post::getId, hiddenPostIds);
+        }
+        List<Long> hiddenBaIds = dislikeService.dislikedBaIds();
+        if (!hiddenBaIds.isEmpty()) {
+            // NOT IN 会连同 category_id 为 NULL 的帖子一起过滤掉（SQL 三值逻辑），
+            // 这里显式保留无吧帖子：category_id IS NULL OR category_id NOT IN (...)
+            query.and(w -> w.isNull(Post::getCategoryId)
+                    .or().notIn(Post::getCategoryId, hiddenBaIds));
+        }
     }
 
     private Page<Post> pageOf(long current, long size) {

@@ -4,6 +4,7 @@ springBootTest/target/
 
 # 启动器把后端输出写到这里，日志属于本机运行态数据
 springBootTest/log/startup.log
+springBootTest/log/backend-8081-ps.log
 springBootTest/log/*.log.gz
 
 # 仓库内 uploads 只是旧数据的搬运源，正式文件在 ~/blog-data/uploads

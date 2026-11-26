@@ -7,6 +7,7 @@ import com.fenglin.blog.dto.CommunityModels.CategoryRequest;
 import com.fenglin.blog.security.CurrentUserHolder;
 import com.fenglin.blog.security.RequireAuth;
 import com.fenglin.blog.service.TaxonomyService;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +47,14 @@ public class TaxonomyController {
     public R<Void> updateCategory(@PathVariable long id, @RequestBody CategoryRequest request) {
         taxonomyService.updateCategory(id, request.name(), request.description(), CurrentUserHolder.require());
         return R.ok("吧信息已更新", null);
+    }
+
+    /** 解散吧：仅吧主或管理员，软下架（帖子保留） */
+    @RequireAuth
+    @DeleteMapping("/categories/{id}")
+    public R<Void> dissolveCategory(@PathVariable long id) {
+        taxonomyService.dissolveCategory(id, CurrentUserHolder.require());
+        return R.ok("吧已解散", null);
     }
 
     @GetMapping("/tags")

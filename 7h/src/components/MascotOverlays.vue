@@ -52,6 +52,7 @@
           <span class="mc-play-dot" aria-hidden="true">◈</span>光轮
         </button>
         <button type="button" role="menuitem" @click="act('next')">换个表情</button>
+        <button type="button" role="menuitem" @click="act('jump')">跳一下</button>
         <button type="button" role="menuitem" @click="act('toggleMute')">
           {{ muted ? '取消静音' : '暂时静音' }}
         </button>
@@ -90,6 +91,37 @@
           <label class="mc-set-row mc-set-check">
             <input
               type="checkbox"
+              :checked="settings.motion !== false"
+              @change="change('motion', $event.target.checked)"
+            />
+            <span>动态动作</span>
+          </label>
+          <label class="mc-set-row mc-set-check" :class="{ 'is-off': settings.motion === false }">
+            <input
+              type="checkbox"
+              :checked="settings.roam !== false"
+              :disabled="settings.motion === false"
+              @change="change('roam', $event.target.checked)"
+            />
+            <span>自由走动</span>
+          </label>
+          <!-- 播放倍速：参考 dsh-desktop-pet 的 animationSpeed / dsh-pet 的 0.5x–4x 变速 -->
+          <div class="mc-set-row" :class="{ 'is-off': settings.motion === false }">
+            <span>动作速度</span>
+            <div class="mc-set-seg is-speed">
+              <button
+                v-for="s in speedSteps"
+                :key="s"
+                type="button"
+                :disabled="settings.motion === false"
+                :class="{ on: (settings.speed || 1) === s }"
+                @click="change('speed', s)"
+              >{{ s }}×</button>
+            </div>
+          </div>
+          <label class="mc-set-row mc-set-check">
+            <input
+              type="checkbox"
               :checked="settings.eco"
               @change="change('eco', $event.target.checked)"
             />
@@ -123,7 +155,7 @@
  * 监听「点击外部」关闭，鼠标移出不再误关。
  */
 import { ref, watch, nextTick } from 'vue'
-import { SIZE_STEPS } from '../mascot/config'
+import { SIZE_STEPS, SPEED_STEPS } from '../mascot/config'
 
 const props = defineProps({
   line: { type: String, default: '' },
@@ -142,6 +174,7 @@ const props = defineProps({
 const emit = defineEmits(['dismiss-bubble', 'close-menu', 'action', 'setting-change'])
 
 const sizeSteps = SIZE_STEPS
+const speedSteps = SPEED_STEPS
 const menuEl = ref(null)
 const settingsOpen = ref(false)
 

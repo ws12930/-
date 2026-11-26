@@ -40,10 +40,15 @@ export function useMascotTimers() {
     return id
   }
 
+  /**
+   * rAF 封装。注意要把浏览器给的时间戳透传给回调：
+   * 位移 / 跳跃这类逐帧动画都靠 (now - t0) 算进度，拿不到时间戳会得到 NaN，
+   * 表现是「刚开始就结束」。旧版回调都是无参的，透传不会影响它们。
+   */
   function raf(fn) {
-    const id = window.requestAnimationFrame(() => {
+    const id = window.requestAnimationFrame((ts) => {
       rafs.delete(id)
-      if (!paused) fn()
+      if (!paused) fn(ts)
     })
     rafs.add(id)
     return id

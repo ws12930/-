@@ -191,6 +191,9 @@ async function doSave() {
     router.push({ name: status.toUpperCase() === 'DRAFT' ? 'mine' : 'blog' })
   } catch (e) {
     error.value = e.message || '保存失败'
+    // 保存失败也派发一次，detail.status = 'ERROR'：桌宠据此播「沮丧」动作并说一句安慰。
+    // 复用 blog:saved 而不新开事件，是因为消费方只关心「这次保存的结果状态」。
+    window.dispatchEvent(new CustomEvent(EVT_BLOG_SAVED, { detail: { status: 'ERROR' } }))
   } finally {
     saving.value = false
   }

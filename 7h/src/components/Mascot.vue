@@ -8,7 +8,15 @@
     class="mascot"
     :class="[
       `side-${position.side.value}`,
-      { dragging: position.dragging.value, mini, muted, sleeping, hovering, 'is-eco': settings.eco }
+      {
+        dragging: position.dragging.value,
+        mini,
+        muted,
+        sleeping,
+        hovering,
+        'is-eco': settings.eco,
+        'is-roaming': motion.state.value === 'walk'
+      }
     ]"
     :style="rootStyle"
   >
@@ -54,7 +62,8 @@
       v-else
       ref="petEl"
       class="mc-body"
-      :class="idleClass"
+      :class="`state-${motion.state.value}`"
+      :style="bodyStyle"
       type="button"
       :title="`看板娘 青禾 · ${face.label}（点我说话 · 长按或点 ⋯ 打开菜单 · 双击收起）`"
       :aria-label="`看板娘青禾 · ${face.label}`"
@@ -68,7 +77,15 @@
       @mouseenter="onEnter"
       @mouseleave="onLeave"
     >
-      <img :key="face.label" :src="face.img" :alt="face.label" draggable="false" decoding="async" />
+      <!-- 帧动画画布：帧序列 / GIF 都在 MascotSprite 里播放，状态由 useMascotMotion 决定 -->
+      <MascotSprite
+        :src="motion.clip.value.src"
+        :frames="motion.clip.value.frames"
+        :fps="motion.clip.value.fps"
+        :loop="motion.clip.value.loop"
+        :paused="motion.frozen.value"
+        :playback-rate="motion.playbackRate.value"
+      />
       <span v-if="sleeping" class="mc-zzz">Zzz</span>
       <span v-if="muted" class="mc-mute">静音</span>
     </button>
@@ -118,6 +135,10 @@
  * 浮层 UI 在 MascotOverlays.vue，样式在 assets/mascot.css。这里只负责把手感串起来：
  * 拖拽手势、单击与双击、菜单开关与焦点、路由联动、生命周期。
  *
+ * 动作层拆成两块：mascot/useMascotMotion.js 管状态机（idle / walk / jump / drag / land）
+ * 与位移，components/MascotSprite.vue 管逐帧渲染。本文件只做接线：拖拽开始 / 结束、
+ * 悬停挂起、菜单挂起、暂停恢复，都转成对 motion 的一次调用，不改原有手势逻辑。
+ *
  * 相比旧版修掉的确定缺陷（细节见各 composable 的注释）：
  * - 拖放手后 click 会绕过 dragging 判断多说一句 → suppressTap 消费掉；
  * - 右键 pointerdown 误进拖拽 → 只认左键；
@@ -136,17 +157,19 @@ import { resolveRiftUrl, resolveGuanglunUrl } from '../utils/gameConfig'
 import { EVT_SESSION_CHANGED, EVT_BLOG_SAVED } from '../utils/constants'
 import GameStage from './GameStage.vue'
 import MascotOverlays from './MascotOverlays.vue'
+import MascotSprite from './MascotSprite.vue'
 import {
   FACES, SCENE_LINES, GRABBED, DROPPED, daypartLine, facePool,
   DEFAULT_SETTINGS, SMALL_SCREEN_PX, LONG_PRESS_MS,
   IDLE_MS, TAP_DELAY_MS, MOVE_THRESHOLD, HOUR_TICK_MS,
-  IDLE_CLEAR_MS, IDLE_MIN_MS, IDLE_JITTER_MS,
   RESIZE_DEBOUNCE_MS, MIN_GAP, TOP_LIMIT, OVERLAY_SAFE_GAP, OVERLAY_ESTIMATE_PX
 } from '../mascot/config'
 import { useMascotTimers } from '../mascot/useMascotTimers'
 import { useMascotSpeech } from '../mascot/useMascotSpeech'
 import { useMascotPosition } from '../mascot/useMascotPosition'
 import { useMascotLive } from '../mascot/useMascotLive'
+import { useMascotMotion } from '../mascot/useMascotMotion'
+import { preloadMotion } from '../mascot/animations'
 import '../assets/mascot.css'
 
 const route = useRoute()
@@ -166,7 +189,6 @@ const meName = ref('')
 const hour = ref(new Date().getHours())
 const hovering = ref(false)
 const showCard = ref(false)
-const idleClass = ref('')
 const overlayBelow = ref(false)
 const warn = ref('')
 const settings = reactive({ ...DEFAULT_SETTINGS })
@@ -192,55 +214,52 @@ const position = useMascotPosition({
 })
 const live = useMascotLive({ timers, speak: speech.speak, isMuted: muted, isMini: mini })
 
+/**
+ * 动作系统。帧动画负责姿态，lean / lift 负责整体倾斜与离地高度，
+ * 两者分开后拖拽、走动、跳跃可以各自独立调节，也更方便以后换素材。
+ */
+const motion = useMascotMotion({
+  timers,
+  position,
+  settings,
+  isMini: mini,
+  isSleepy: sleeping,
+  faceKey: computed(() => face.value.key || 'welcome')
+})
+
 const rootStyle = computed(() => ({
   ...position.posStyle.value,
   '--mc-size': `${settings.size}px`,
   '--mc-opacity': String(settings.opacity)
 }))
 
+/** 身体容器的动态变量：走动倾斜 + 跳跃高度，由 CSS transform 消费 */
+const bodyStyle = computed(() => ({
+  '--mc-lean': `${motion.lean.value}deg`,
+  '--mc-lift': `${motion.lift.value}px`
+}))
+
 // ---- 定时器总排程：pause 一次全清，resume 只从这一处重新起一套，杜绝叠链 ----
 let rotateId = null
 let resizeId = null
-let idleNextId = null
-let idleRafId = null
-let idleClearId = null
 let tapId = null
 let scrollRaf = null
 let readFired = false
 let userExpanded = false
 
-const IDLE_ANIMS = ['is-peek', 'is-hop', 'is-sway']
-
 function restartRotate() {
   timers.clear(rotateId)
   rotateId = timers.interval(() => {
-    if (!mini.value && !document.hidden && !hovering.value) {
+    // 正在走动 / 跳跃时换表情会把动作硬切掉，等回到 idle 再轮转
+    if (!mini.value && !document.hidden && !hovering.value && motion.state.value === 'idle') {
       idx.value = (idx.value + 1) % pool.value.length
     }
   }, IDLE_MS)
 }
 
-function stopIdle() {
-  timers.clear(idleRafId)
-  timers.clear(idleClearId)
-  timers.clear(idleNextId)
-  idleClass.value = ''
-}
-
-function playIdle() {
-  if (mini.value || position.dragging.value || hovering.value || settings.eco) return
-  stopIdle()
-  idleRafId = timers.raf(() => {
-    idleClass.value = IDLE_ANIMS[Math.floor(Math.random() * IDLE_ANIMS.length)]
-    idleClearId = timers.timeout(() => (idleClass.value = ''), IDLE_CLEAR_MS)
-  })
-  idleNextId = timers.timeout(playIdle, IDLE_MIN_MS + Math.random() * IDLE_JITTER_MS)
-}
-
 function scheduleAll() {
   hour.value = new Date().getHours()
   restartRotate()
-  playIdle()
   speech.scheduleChatter()
   speech.scheduleSaveNudge()
   timers.interval(() => (hour.value = new Date().getHours()), HOUR_TICK_MS)
@@ -248,8 +267,16 @@ function scheduleAll() {
   syncScrollWatch()
 }
 
-function pauseAll() { timers.pause() }
-function resumeAll() { timers.resume(); scheduleAll() }
+// 自主动作（走动 / 跳跃）的排程在 useMascotMotion 内部，跟着同一套 timers 一起停
+function pauseAll() {
+  timers.pause()
+  motion.pause()
+}
+function resumeAll() {
+  timers.resume()
+  motion.resume()
+  scheduleAll()
+}
 
 function onVisibility() {
   if (document.hidden) pauseAll()
@@ -258,17 +285,16 @@ function onVisibility() {
   syncScrollWatch()
 }
 
-// ---- 悬停：定住小动作与漂浮，方便点选 / 拖拽 ----
+// ---- 悬停：定住自主动作，方便点选 / 拖拽（呼吸动画继续播，不会「僵住」）----
 function onEnter() {
   hovering.value = true
   showCard.value = true
-  stopIdle()
+  motion.hold('hover')
 }
 function onLeave() {
   hovering.value = false
   showCard.value = false
-  stopIdle()
-  idleNextId = timers.timeout(playIdle, 1500)
+  motion.release('hover')
 }
 
 // ---- 表情 / 场景 ----
@@ -366,6 +392,7 @@ function onMove(e) {
     downInfo.moved = true
     position.dragging.value = true
     showCard.value = false
+    motion.beginDrag() // 拖拽优先级最高：会立刻掐断走动 / 跳跃
     speech.speak(speech.pickFresh(GRABBED))
   }
   if (downInfo.moved) {
@@ -397,6 +424,7 @@ function onUp() {
   if (moved) {
     position.snap()
     position.save()
+    motion.endDrag() // 落地缓冲帧播完再回到 idle
     speech.speak(speech.pickFresh(DROPPED))
   }
   // 拖拽 / 长按结束后浏览器仍会派发 click：这里立标记，让 onTap 消费掉这一次，
@@ -410,6 +438,7 @@ function onUp() {
 function onTap() {
   if (position.dragging.value) return
   if (suppressTap) { suppressTap = false; return }
+  motion.nudge() // 被戳到轻轻蹦一下，先给动作反馈，再等台词
   timers.clear(tapId)
   tapId = timers.timeout(() => {
     if (mini.value) return
@@ -425,13 +454,17 @@ function openMenu(trigger) {
   showCard.value = false
   if (menuOpen.value) {
     menuTrigger = trigger && typeof trigger.focus === 'function' ? trigger : petEl.value
+    motion.hold('menu')
     updateOverlayPlacement()
+  } else {
+    motion.release('menu')
   }
 }
 function closeMenu() {
   if (!menuOpen.value) return
   menuOpen.value = false
   menuTrigger?.focus?.()
+  motion.release('menu')
 }
 function onMenuAction(key) {
   closeMenu()
@@ -439,6 +472,7 @@ function onMenuAction(key) {
     playGame: () => (gameOpen.value = true),
     playRift: () => (riftOpen.value = true),
     playGuanglun: () => (guanglunOpen.value = true),
+    jump: () => motion.playJump(undefined, true),
     next,
     toggleMute,
     resetPos,
@@ -519,6 +553,9 @@ function updateOverlayPlacement() {
 }
 watch([menuOpen, () => speech.showBubble.value, showCard], updateOverlayPlacement)
 
+// 换表情后顺手预热新表情的动作帧，下一次走动 / 跳跃才不会卡一拍
+watch(() => face.value.key, (key) => key && preloadMotion(key))
+
 // ---- 用户昵称：storage 事件不覆盖本标签页，补一条自定义事件 ----
 function refreshMe() {
   try {
@@ -581,6 +618,8 @@ onMounted(() => {
   const im = new Image()
   im.decoding = 'async'
   im.src = face.value.img
+  // 动作帧条在空闲时预热，避免第一次走动 / 跳跃时画面空一拍
+  preloadMotion(face.value.key)
 
   window.addEventListener('resize', onResize)
   window.addEventListener('storage', refreshMe)

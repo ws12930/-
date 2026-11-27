@@ -3,11 +3,6 @@
     <div class="auth-bg left"></div>
     <div class="auth-bg right"></div>
 
-    <div class="auth-mascot">
-      <img :src="mascotImg" alt="看板娘 青禾" />
-      <p class="auth-mascot-line">注册一下就有自己的主页啦，我在这儿等你</p>
-    </div>
-
     <div class="auth-card panel">
       <h1 class="auth-title grad-text">注 册</h1>
       <p class="auth-subtitle grad-text">加入 7h</p>
@@ -89,7 +84,6 @@ import { reactive, ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { register, checkUsername } from '../api/auth'
 import BackButton from '../components/BackButton.vue'
-import mascotImg from '../assets/mascot/mascot-welcome.webp'
 
 const router = useRouter()
 

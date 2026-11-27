@@ -3,12 +3,6 @@
     <div class="login-bg left"></div>
     <div class="login-bg right"></div>
 
-    <!-- 看板娘「青禾」立绘 -->
-    <div class="auth-mascot">
-      <img :src="mascotImg" alt="看板娘 青禾" />
-      <p class="auth-mascot-line">欢迎回来～我是青禾，慢慢写，好好说</p>
-    </div>
-
     <div class="card panel">
       <h1 class="grad-text title">7h</h1>
       <p class="subtitle grad-text">登 录</p>
@@ -71,7 +65,6 @@ import { SESSION_ME_KEY, notifySessionChanged } from '../utils/constants'
 import { reactive, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { login } from '../api/auth'
-import mascotImg from '../assets/mascot/mascot-welcome.webp'
 
 const router = useRouter()
 const route = useRoute()

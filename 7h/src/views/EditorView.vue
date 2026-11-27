@@ -126,8 +126,6 @@
                 @change="onVideoPicked"
               />
             </div>
-            <p class="media-tip">MP4 ≤ 200MB，上传后点「插入」放进正文</p>
-
             <div v-if="videoList.length" class="media-list">
               <div v-for="(v, i) in videoList" :key="v.url + i" class="media-card">
                 <div class="mc-thumb">
@@ -591,7 +589,6 @@ onBeforeUnmount(() => {
 .media-add:hover:not(:disabled) { color: #fff; background: rgba(143, 208, 174, 0.2); }
 .media-add:disabled { opacity: 0.55; cursor: not-allowed; }
 .cb-file { display: none; }
-.media-tip { margin-top: 6px; font-size: 11px; line-height: 1.6; color: var(--c-dim); }
 .media-empty {
   margin-top: 18px;
   padding: 30px 8px;

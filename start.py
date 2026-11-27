@@ -22,6 +22,9 @@
     看不懂的 MIME 错误，白屏原因反而被埋掉）；
   * 反代和探活统一走 127.0.0.1，不再「本机 → 自己的局域网 IP → 本机」绕一圈，
     避免回环 NAT / 防火墙按进程放行导致接口全部超时。
+  * 依赖检查不再只看「node_modules 目录在不在」：目录存在但缺包（半截安装、
+    换机器复制过来的残包）照样会打包失败，现在按 package.json 逐个核对，
+    缺了自动 npm install 补齐；打包若仍报解析不到依赖，再补装并重试一次。
 
 按 Ctrl+C 退出，会连带关闭后端进程。
 
@@ -31,6 +34,7 @@
   * 换网段时用环境变量 BLOG_HOST 指定新 IP，不必改代码。
 """
 import glob
+import json
 import os
 import socket
 import subprocess
@@ -393,6 +397,81 @@ def find_npm():
     return None
 
 
+def frontend_deps_missing():
+    """按 package.json 核对 node_modules 里的顶层依赖是否齐全，返回缺失包名列表。
+
+    踩过的坑：以前只判断「node_modules 目录在不在」，目录在但缺包时
+    （半截安装、从别处拷来的残包）照样直接 npm run build，Rollup 会报
+    "Failed to resolve import xxx"，用户只看到一串堆栈和一个白屏。
+    npm 会把顶层依赖平铺到 node_modules/<name>，scoped 包则是
+    node_modules/<@scope>/<name>，逐个查它自己的 package.json 即可。
+    """
+    pkg_path = os.path.join(FRONT_DIR, "package.json")
+    try:
+        with open(pkg_path, encoding="utf-8") as fh:
+            pkg = json.load(fh)
+    except (OSError, ValueError):
+        # 读不出来就别自作主张，交给 npm 自己去报错
+        return []
+    names = list((pkg.get("dependencies") or {}).keys())
+    names += list((pkg.get("devDependencies") or {}).keys())
+    missing = []
+    for name in names:
+        rel = os.path.join("node_modules", *name.split("/"), "package.json")
+        if not os.path.isfile(os.path.join(FRONT_DIR, rel)):
+            missing.append(name)
+    return missing
+
+
+def install_frontend_deps(npm, reason="前端依赖不完整"):
+    """跑一次 npm install 补齐依赖，并复查是否真的齐了"""
+    log("%s，正在执行 npm install ..." % reason)
+    try:
+        install = subprocess.run([npm, "install", "--no-audit", "--no-fund"],
+                                 cwd=FRONT_DIR, capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=600)
+    except subprocess.TimeoutExpired:
+        warn("npm install 超过 10 分钟没结束，先中断了（检查网络 / npm 源）")
+        return False
+    if install.returncode != 0:
+        detail = ((install.stderr or "") + (install.stdout or "")).strip().splitlines()
+        print("-" * 60)
+        print("\n".join(detail[-25:]))
+        print("-" * 60)
+        warn("npm install 失败 —— 依赖装不上，打包必然失败")
+        return False
+    still = frontend_deps_missing()
+    if still:
+        warn("npm install 已结束，但以下依赖仍然缺失：%s" % ", ".join(still))
+        warn("可手动执行：cd 7h && npm install（或删掉 node_modules 后重装）")
+        return False
+    log("前端依赖已补齐")
+    return True
+
+
+def run_frontend_build(npm):
+    """执行一次打包，返回 (是否成功, 合并后的输出)"""
+    log("正在重新打包前端（npm run build）...")
+    try:
+        built = subprocess.run([npm, "run", "build"], cwd=FRONT_DIR,
+                               capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=300)
+    except subprocess.TimeoutExpired:
+        warn("npm run build 超过 5 分钟没结束，先中断了")
+        return False, ""
+    output = (built.stderr or "") + (built.stdout or "")
+    if built.returncode != 0:
+        # 打包报错才是真因（比如某个源文件没提交、某个依赖没装），把输出
+        # 直接摊给用户看，否则用户只会看到一个白屏，还得自己去猜。
+        lines = output.strip().splitlines()
+        print("-" * 60)
+        print("\n".join(lines[-40:]))
+        print("-" * 60)
+        warn("前端打包失败 —— 上面的报错就是白屏的真因")
+        return False, output
+    return True, output
+
+
 def rebuild_frontend():
     """dist 缺文件时现场重新打包。返回 True 表示打包成功且产物完整"""
     npm = find_npm()
@@ -402,35 +481,23 @@ def rebuild_frontend():
     if not os.path.isfile(os.path.join(FRONT_DIR, "package.json")):
         warn("7h 目录里没有 package.json，无法打包")
         return False
-    if not os.path.isdir(os.path.join(FRONT_DIR, "node_modules")):
-        log("首次打包，先安装前端依赖（npm install）...")
-        try:
-            install = subprocess.run([npm, "install", "--no-audit", "--no-fund"],
-                                     cwd=FRONT_DIR, capture_output=True, text=True,
-                                     encoding="utf-8", errors="replace", timeout=600)
-        except subprocess.TimeoutExpired:
-            warn("npm install 超过 10 分钟没结束，先中断了（检查网络 / npm 源）")
-            return False
-        if install.returncode != 0:
-            warn("npm install 失败：%s" % (install.stderr or "").strip()[-500:])
+
+    missing = frontend_deps_missing()
+    if missing:
+        if not install_frontend_deps(npm, "前端依赖不完整，缺少：%s" % ", ".join(missing)):
             return False
 
-    log("正在重新打包前端（npm run build）...")
-    try:
-        built = subprocess.run([npm, "run", "build"], cwd=FRONT_DIR,
-                               capture_output=True, text=True,
-                               encoding="utf-8", errors="replace", timeout=300)
-    except subprocess.TimeoutExpired:
-        warn("npm run build 超过 5 分钟没结束，先中断了")
-        return False
-    if built.returncode != 0:
-        # 打包报错才是真因（比如某个源文件没提交），把尾部输出直接摊给用户看，
-        # 否则用户只会看到一个白屏，还得自己去猜。
-        detail = ((built.stderr or "") + (built.stdout or "")).strip().splitlines()
-        print("-" * 60)
-        print("\n".join(detail[-25:]))
-        print("-" * 60)
-        warn("前端打包失败 —— 上面的报错就是白屏的真因")
+    ok, output = run_frontend_build(npm)
+    if not ok:
+        # Rollup 报「解析不到某个包」基本都是依赖没装全 / 装坏了：
+        # 再补装一次并重试打包，别让用户对着一串堆栈无从下手。
+        low = output.lower()
+        if "failed to resolve import" in low or "could not resolve" in low:
+            warn("打包报依赖解析失败，补装依赖后重试一次")
+            if install_frontend_deps(npm, "重新补装前端依赖"):
+                ok2, _ = run_frontend_build(npm)
+                if ok2:
+                    return not dist_assets_missing()
         return False
     return not dist_assets_missing()
 

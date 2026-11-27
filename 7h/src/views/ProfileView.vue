@@ -45,7 +45,6 @@
             <button class="g-btn g-btn-sm pf-upload" :disabled="uploading" @click="pickAvatar">
               {{ uploading ? '上传中…' : '更换头像' }}
             </button>
-            <span class="pf-note">支持 JPG / PNG / GIF / WEBP<br />不超过 5MB</span>
             <input
               ref="fileInput"
               class="pf-file"
@@ -181,10 +180,6 @@ async function onFile(e) {
   const file = e.target.files && e.target.files[0]
   e.target.value = ''
   if (!file) return
-  if (file.size > 5 * 1024 * 1024) {
-    error.value = '图片不能超过 5MB'
-    return
-  }
   uploading.value = true
   error.value = ''
   try {
@@ -282,7 +277,6 @@ onMounted(() => {
   border-right: 1px solid rgba(255, 255, 255, 0.09);
 }
 .pf-upload { width: 100%; }
-.pf-note { font-size: 11px; line-height: 1.6; color: var(--c-dim); }
 .pf-file { display: none; }
 
 .pf-field { text-align: left; margin-bottom: 16px; }

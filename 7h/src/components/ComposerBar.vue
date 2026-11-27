@@ -21,7 +21,7 @@
         v-if="video"
         type="button"
         class="cb-btn"
-        title="上传 MP4 视频（最大 200MB）"
+        title="上传 MP4 视频"
         :disabled="uploading"
         @click.stop="openVideoPicker"
       >
@@ -93,7 +93,6 @@
           <button type="button" class="cb-ok" :disabled="stickerUploading" @click="openStickerPicker">
             {{ stickerUploading ? '上传中…' : '+ 添加表情' }}
           </button>
-          <span class="cb-pop-note">图片不超过 5MB，存进你的账号</span>
         </div>
         <p v-if="stickerError" class="cb-pop-note err">{{ stickerError }}</p>
       </div>

@@ -422,11 +422,16 @@
   const TAU = Math.PI * 2;
 
   const TICK = 10;
-  const INPUT_BUFFER_MS = 120;
+  // 输入缓冲放宽到 140ms，并允许缓存两个转向意图：手快连按（上 → 右）时
+  // 原来后一个会覆盖前一个，表现为「按了没反应」。
+  const INPUT_BUFFER_MS = 140;
+  const INPUT_QUEUE_MAX = 2;
   const BOOST_RAMP_IN = 220;
   const BOOST_RAMP_OUT = 320;
-  const BASE_SPEED = 82;
-  const BOOST_SPEED = 48;
+  // 移动间隔必须取 TICK 的整数倍。82ms 不是 10 的倍数，实际会走成 80/90ms
+  // 交替，视觉上就是一冲一顿；80 / 50 让每一格耗时恒定。
+  const BASE_SPEED = 80;
+  const BOOST_SPEED = 50;
   const POWERUP_LIFE = 14000;
   const MAX_POWERUPS = 3;
   const SHIELD_MS = 3000;
@@ -436,14 +441,20 @@
   const TRAIL_MIN_GLOW = 0.24;
   const ROUND_PAUSE = 1500;
 
-  // AI 陪练：菜鸟 / 普通 / 高手 / 地狱，四档递进
+  // AI 陪练：菜鸟 / 普通 / 高手 / 地狱 / 修罗，逐档递进
   // 地狱 = 对抗搜索（α-β 剪枝 + 迭代加深），把双方未来若干步都算进去，假设对手完美应对
+  //
+  // 本轮整体下调一档强度：反应更慢、失误更多、进攻性更低。
+  //   react    = 隔多少毫秒才重新决策一次（越大越迟钝）
+  //   mistake  = 明知有更优解也走次优方向的概率
+  //   searchMs = 搜索型 AI 的同步预算。原来 34 / 70ms 会直接把主线程卡住掉帧，
+  //              压到 18 / 30ms，既降难度也换回流畅；maxDepth 同步收紧。
   const AI_CFG = {
-    easy:   { react: 300, mistake: 0.38, chase: 0.05, risk: 0.40, voronoi: 0.0, hug: 0.0, name: "菜鸟" },
-    normal: { react: 140, mistake: 0.08, chase: 0.30, risk: 0.12, voronoi: 0.6, hug: 0.5, name: "普通" },
-    hard:   { react: 55,  mistake: 0.00, chase: 0.85, risk: 0.04, voronoi: 1.0, hug: 1.0, name: "高手" },
-    hell:   { react: 0,   mistake: 0.00, chase: 0.00, risk: 0.00, voronoi: 1.0, hug: 0.0, name: "地狱", brain: "search", searchMs: 34 },
-    shura:  { react: 0,   mistake: 0.00, chase: 0.00, risk: 0.00, voronoi: 1.0, hug: 0.0, name: "修罗", brain: "pair",   searchMs: 70 }
+    easy:   { react: 340, mistake: 0.42, chase: 0.02, risk: 0.46, voronoi: 0.0, hug: 0.0, name: "菜鸟" },
+    normal: { react: 200, mistake: 0.16, chase: 0.18, risk: 0.20, voronoi: 0.45, hug: 0.35, name: "普通" },
+    hard:   { react: 95,  mistake: 0.05, chase: 0.55, risk: 0.08, voronoi: 0.80, hug: 0.75, name: "高手" },
+    hell:   { react: 40,  mistake: 0.03, chase: 0.00, risk: 0.00, voronoi: 1.0, hug: 0.0, name: "地狱", brain: "search", searchMs: 18, maxDepth: 8 },
+    shura:  { react: 32,  mistake: 0.02, chase: 0.00, risk: 0.00, voronoi: 1.0, hug: 0.0, name: "修罗", brain: "pair",   searchMs: 22, maxDepth: 6 }
   };
   const AI_DIRS = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
 
@@ -458,6 +469,19 @@
     { main: "#22d3ee", rgb: "34,211,238", soft: "rgba(34,211,238," },
     { main: "#f472b6", rgb: "244,114,182", soft: "rgba(244,114,182," }
   ];
+
+  // 尾迹每帧最多要画上千格，如果每格现拼 "rgba(...)" 字符串，光字符串分配
+  // 就是一笔可观开销。把透明度量化成 16 档预先存好，绘制时只做一次下标。
+  const TRAIL_STEPS = 16;
+  const TRAIL_COLORS = COLORS.map(function (col) {
+    const outer = [], inner = [];
+    for (let i = 0; i < TRAIL_STEPS; i++) {
+      const glow = TRAIL_MIN_GLOW + (1 - TRAIL_MIN_GLOW) * i / (TRAIL_STEPS - 1);
+      outer.push(col.soft + (0.05 + 0.16 * glow) + ")");
+      inner.push(col.soft + (0.16 + 0.42 * glow) + ")");
+    }
+    return { outer: outer, inner: inner };
+  });
 
   const SPAWNS = [
     { x: 6, y: 6, dir: { x: 1, y: 0 } },
@@ -652,10 +676,11 @@
       id: id,
       x: sp.x, y: sp.y,
       dir: { x: sp.dir.x, y: sp.dir.y },
-      queuedDir: null,
-      queuedAt: -1e9,
+      // 转向意图队列（最多两条）：旧的单槽在快速连按时会互相覆盖
+      inputQueue: [],
       alive: true,
       score: score,
+      trailCount: 1,
       acc: 0,
       speedT: 0,
       interval: BASE_SPEED,
@@ -794,22 +819,29 @@
   btnReset.addEventListener("click", function () { newMatch(targetWins); });
 
   // ---------- 输入缓冲 ----------
-  function setDir(p, nd) {
+  // 转向意图进队列，而不是单槽覆盖：快连按「上 → 右」两下都能生效，
+  // 第二下在下一格被消费。AI 自己下发的意图用 replace=true，不和玩家一样排队。
+  function setDir(p, nd, replace) {
     if (!p || !p.alive) return;
-    if (p.queuedDir && p.queuedDir.x === nd.x && p.queuedDir.y === nd.y) return;
-    p.queuedDir = { x: nd.x, y: nd.y };
-    p.queuedAt = gameTime;
+    const q = p.inputQueue || (p.inputQueue = []);
+    if (replace) q.length = 0;
+    const last = q.length ? q[q.length - 1] : p.dir;
+    if (last.x === nd.x && last.y === nd.y) return;
+    if (q.length >= INPUT_QUEUE_MAX) q.shift();
+    q.push({ x: nd.x, y: nd.y, at: gameTime });
   }
   function consumeInput(p) {
     let dir = p.dir;
-    if (p.queuedDir) {
-      const fresh = (gameTime - p.queuedAt) <= INPUT_BUFFER_MS;
-      if (fresh) {
-        const nd = p.queuedDir;
-        const reverse = (nd.x === -p.dir.x && nd.y === -p.dir.y);
-        if (!reverse || p.phaseCharges > 0) dir = nd;
-      }
-      p.queuedDir = null;
+    const q = p.inputQueue;
+    if (!q || !q.length) return dir;
+    // 一格只消费一条：过期 / 非法掉头的直接丢掉，继续看下一条
+    while (q.length) {
+      const it = q.shift();
+      if (gameTime - it.at > INPUT_BUFFER_MS) continue;
+      const reverse = (it.x === -dir.x && it.y === -dir.y);
+      if (reverse && p.phaseCharges <= 0) continue;
+      dir = { x: it.x, y: it.y };
+      break;
     }
     return dir;
   }
@@ -823,6 +855,8 @@
   // blockA/blockB 视为临时障碍（用于模拟"走完这步后"的局面：自己原头部、对手头部）。
   // 返回 { count, stamp }；stamp 标记本次访问集，用于判断与对手是否仍连通。
   const aiVisited = new Uint32Array(COLS * ROWS);
+  // 洪水填充的栈同样预分配：一帧要跑好几次，普通数组 push/pop 的临时对象很浪费
+  const aiStack = new Int32Array(COLS * ROWS);
   let aiStamp = 0;
 
   // Voronoi 领地：从双方头部同时做多源 BFS，每个空格归"先到达"的一方。
@@ -860,11 +894,13 @@
   function aiFlood(sx, sy, cap, blockA, blockB) {
     aiStamp++;
     const stamp = aiStamp;
-    const stack = [sy * COLS + sx];
-    aiVisited[stack[0]] = stamp;
+    let sp = 0;
+    const start = sy * COLS + sx;
+    aiVisited[start] = stamp;
+    aiStack[sp++] = start;
     let count = 0;
-    while (stack.length && count < cap) {
-      const c = stack.pop();
+    while (sp > 0 && count < cap) {
+      const c = aiStack[--sp];
       count++;
       const x = c % COLS, y = (c - x) / COLS;
       for (let d = 0; d < 4; d++) {
@@ -875,7 +911,7 @@
         if (aiVisited[ni] === stamp) continue;
         if (grid[ni] !== 0 || obstacleGrid[ni] !== 0) continue;
         aiVisited[ni] = stamp;
-        stack.push(ni);
+        aiStack[sp++] = ni;
       }
     }
     return { count: count, stamp: stamp };
@@ -1083,7 +1119,7 @@
     searchNodes = 0;
     let bestDi = -1, bestVal = -Infinity;
 
-    for (let depth = 2; depth <= 12; depth++) {
+    for (let depth = 2; depth <= (cfg.maxDepth || 8); depth++) {
       searchAborted = false;
       let layerDi = -1, layerVal = -Infinity, complete = true;
       for (let k = 0; k < 3; k++) {
@@ -1107,7 +1143,8 @@
     }
 
     if (bestDi < 0) { aiDecideGreedy(p, cfg); return; }
-    setDir(p, AI_DIRS[bestDi]);
+    bestDi = applyMistake(p, cfg, bestDi);
+    setDir(p, AI_DIRS[bestDi], true);
   }
 
   // ---------- 修罗级 AI：同时移动对抗搜索 ----------
@@ -1189,11 +1226,11 @@
     // 只有双修罗同场才降预算防卡顿；修罗对地狱等其他组合保持满血
     const foeCfg = AI_CFG[p.id === 1 ? aiDifficulty : aiDifficulty1];
     const bothShura = aiVsAi && foeCfg && foeCfg.brain === "pair";
-    searchDeadline = performance.now() + (bothShura ? 40 : (cfg.searchMs || 70));
+    searchDeadline = performance.now() + (bothShura ? 16 : (cfg.searchMs || 22));
     searchNodes = 0;
     let bestDi = -1, bestVal = -Infinity;
 
-    for (let rounds = 1; rounds <= 8; rounds++) {
+    for (let rounds = 1; rounds <= (cfg.maxDepth || 6); rounds++) {
       searchAborted = false;
       let layerDi = -1, layerVal = -Infinity, complete = true;
       for (let k = 0; k < 3; k++) {
@@ -1231,21 +1268,37 @@
     }
 
     if (bestDi < 0) { aiDecideGreedy(p, cfg); return; }
-    setDir(p, AI_DIRS[bestDi]);
+    bestDi = applyMistake(p, cfg, bestDi);
+    setDir(p, AI_DIRS[bestDi], true);
+  }
+
+  // 高难度也留一点破绽：按 mistake 概率在「不会立刻撞死」的方向里随机改道。
+  // 搜索型 AI 原本完全不读 mistake，地狱 / 修罗配置里的这一项是死参数。
+  function applyMistake(p, cfg, di) {
+    if (!cfg.mistake || Math.random() >= cfg.mistake) return di;
+    const alts = [];
+    for (let k = 0; k < 4; k++) {
+      const nd = AI_DIRS[k];
+      if (nd.x === -p.dir.x && nd.y === -p.dir.y && p.phaseCharges <= 0) continue;
+      if (aiFatal(p, p.x + nd.x, p.y + nd.y, null) === "hard") continue;
+      alts.push(k);
+    }
+    if (alts.length <= 1) return di;
+    return alts[Math.floor(Math.random() * alts.length)];
   }
 
   function aiDecide(p) {
     if (!p || !p.alive || gameState !== "playing") return;
     const cfg = AI_CFG[p.id === 1 ? aiDifficulty1 : aiDifficulty] || AI_CFG.normal;
+    // 反应冷却放在唯一入口：搜索型 AI 以前每格都思考，既过强又吃 CPU
+    if (gameTime < p.aiNextAt) return;
+    p.aiNextAt = gameTime + (cfg.react || 0);
     if (cfg.brain === "search") aiDecideSearch(p, cfg);
     else if (cfg.brain === "pair") aiDecidePair(p, cfg);
     else aiDecideGreedy(p, cfg);
   }
 
   function aiDecideGreedy(p, cfg) {
-    if (gameTime < p.aiNextAt) return;
-    p.aiNextAt = gameTime + cfg.react;
-
     const foe = players[1 - (p.id - 1)];
     const foeAlive = foe && foe.alive;
     const myHead = p.y * COLS + p.x;
@@ -1255,6 +1308,7 @@
     const scale = span * 0.4;
 
     let best = null, bestScore = -Infinity;
+    const legal = [];
     for (let d = 0; d < 4; d++) {
       const nd = AI_DIRS[d];
       const reverse = (nd.x === -p.dir.x && nd.y === -p.dir.y);
@@ -1264,6 +1318,7 @@
       const nx = p.x + nd.x, ny = p.y + nd.y;
       const fatal = aiFatal(p, nx, ny, foe);
       if (fatal === "hard") continue;
+      legal.push(nd);
 
       // 落脚点本身是轨迹/障碍时，空间从下一格估算（穿过去之后）
       let seedX = nx, seedY = ny;
@@ -1356,16 +1411,21 @@
         score += Math.max(0, span * 0.5 - fd) * 0.12 * cfg.chase;
       }
 
-      // 失误：按难度概率注入随机扰动，菜鸟会明显走歪
-      if (cfg.mistake > 0 && Math.random() < cfg.mistake) score -= Math.random() * total * 0.5;
+      // 完全同分时轻微随机，避免对称开局走出镜像死循环
       score += Math.random() * 0.5;
 
       if (score > bestScore) { bestScore = score; best = nd; }
     }
 
+    // 真失误：以概率在「不会立刻撞死」的方向里随便挑一个。
+    // 原来的做法只是给某个方向减分，AI 往往还是选回最优解，低难度形同虚设。
+    if (best && legal.length > 1 && cfg.mistake > 0 && Math.random() < cfg.mistake) {
+      best = legal[Math.floor(Math.random() * legal.length)];
+    }
+
     if (best) {
       p.aiPlan = best;
-      setDir(p, best);
+      setDir(p, best, true);
     }
   }
 
@@ -1476,10 +1536,11 @@
     if (collector) collector.push({ type: type, x: c.x, y: c.y });
   }
 
+  // 轨迹长度直接记在玩家身上：原来每次同时碰撞判定都要扫全图 2700 格，
+  // AI 开局判断还得每个决策再扫一次，纯属浪费。
   function trailLen(id) {
-    let n = 0;
-    for (let i = 0; i < grid.length; i++) if (grid[i] === id) n++;
-    return n;
+    const p = players[id - 1];
+    return p ? (p.trailCount || 0) : 0;
   }
 
   // ---------- 对称判定 ----------
@@ -1583,6 +1644,7 @@
       const cellIdx = idx(p.x, p.y);
       grid[cellIdx] = p.id;
       trailTime[cellIdx] = gameTime;
+      p.trailCount = (p.trailCount || 0) + 1;
       frame.moves.push(ev);
 
       const pi = powerups.findIndex(function (u) { return u.x === p.x && u.y === p.y; });
@@ -1691,7 +1753,7 @@
     return {
       id: id, x: sp.x, y: sp.y,
       dir: { x: sp.dir.x, y: sp.dir.y },
-      queuedDir: null, alive: true,
+      inputQueue: [], alive: true,
       speedT: 0, boostUntil: 0, phaseCharges: 0,
       shieldUntil: 0, shieldCharges: 0
     };
@@ -1839,59 +1901,104 @@
     ctx.closePath();
   }
 
+  // 背景网格是静态的，每帧重画 100 多条线纯属浪费：预渲染成离屏图，
+  // 每帧只 drawImage 一次。扫光条同样预渲染，省掉每帧 createLinearGradient。
+  let backdropCache = null;
+  let glowBandCache = null;
+
+  function buildBackdropCache() {
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.fillStyle = "#070b18";
+    g.fillRect(0, 0, W, H);
+    g.lineWidth = 1;
+    g.strokeStyle = "rgba(86,196,232,0.055)";
+    g.beginPath();
+    for (let x = 1; x < COLS; x++) { g.moveTo(x * CELL, 0); g.lineTo(x * CELL, H); }
+    for (let y = 1; y < ROWS; y++) { g.moveTo(0, y * CELL); g.lineTo(W, y * CELL); }
+    g.stroke();
+    g.strokeStyle = "rgba(86,196,232,0.095)";
+    g.beginPath();
+    for (let x = 5; x < COLS; x += 5) { g.moveTo(x * CELL, 0); g.lineTo(x * CELL, H); }
+    for (let y = 5; y < ROWS; y += 5) { g.moveTo(0, y * CELL); g.lineTo(W, y * CELL); }
+    g.stroke();
+    backdropCache = c;
+
+    const band = document.createElement("canvas");
+    band.width = W; band.height = 70;
+    const bg = band.getContext("2d");
+    const sg = bg.createLinearGradient(0, 0, 0, 70);
+    sg.addColorStop(0, "rgba(80,220,255,0)");
+    sg.addColorStop(0.5, "rgba(80,220,255,0.035)");
+    sg.addColorStop(1, "rgba(80,220,255,0)");
+    bg.fillStyle = sg;
+    bg.fillRect(0, 0, W, 70);
+    glowBandCache = band;
+  }
+
   function drawBackdrop() {
-    ctx.fillStyle = "#070b18";
-    ctx.fillRect(0, 0, W, H);
+    if (!backdropCache) buildBackdropCache();
+    ctx.drawImage(backdropCache, 0, 0);
 
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(86,196,232,0.055)";
-    ctx.beginPath();
-    for (let x = 1; x < COLS; x++) { ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, H); }
-    for (let y = 1; y < ROWS; y++) { ctx.moveTo(0, y * CELL); ctx.lineTo(W, y * CELL); }
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(86,196,232,0.095)";
-    ctx.beginPath();
-    for (let x = 5; x < COLS; x += 5) { ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, H); }
-    for (let y = 5; y < ROWS; y += 5) { ctx.moveTo(0, y * CELL); ctx.lineTo(W, y * CELL); }
-    ctx.stroke();
-
+    // 静态网格之上只剩两条动态元素：缓慢下移的扫描细线 + 一条纵向光带
     const off = (gameTime / 45) % 5;
     ctx.fillStyle = "rgba(130,210,255,0.022)";
     for (let y = off - 5; y < H; y += 5) ctx.fillRect(0, y, W, 1);
 
     const sy = ((gameTime / 14) % (H + 120)) - 60;
-    const sg = ctx.createLinearGradient(0, sy - 35, 0, sy + 35);
-    sg.addColorStop(0, "rgba(80,220,255,0)");
-    sg.addColorStop(0.5, "rgba(80,220,255,0.035)");
-    sg.addColorStop(1, "rgba(80,220,255,0)");
-    ctx.fillStyle = sg;
-    ctx.fillRect(0, sy - 35, W, 70);
+    ctx.drawImage(glowBandCache, 0, sy - 35);
+  }
+
+  // 障碍每格都带 shadowBlur，在 canvas 上非常贵；障碍是静态的，预渲染一次即可。
+  // 回放用的是另一套障碍数据，直接现画（数量少，不影响）。
+  let obstacleCache = null;
+  let obstacleCacheKey = null;
+
+  function paintObstacles(g, cells) {
+    for (let i = 0; i < cells.length; i++) {
+      const o = cells[i];
+      const px = o.x * CELL, py = o.y * CELL;
+      // 橙色实体砖：琥珀外发光 + 金属斜面 + 警示斜纹，和双方轨迹一眼区分
+      g.shadowColor = "rgba(251,146,60,0.55)";
+      g.shadowBlur = 9;
+      g.fillStyle = "rgba(120,53,15,0.62)";
+      g.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+      g.shadowBlur = 0;
+      g.fillStyle = "rgba(251,146,60,0.30)";
+      g.fillRect(px + 1, py + 1, CELL - 2, 3);
+      g.fillRect(px + 1, py + 1, 3, CELL - 2);
+      g.strokeStyle = "rgba(251,146,60,0.92)";
+      g.lineWidth = 1.2;
+      g.strokeRect(px + 1.5, py + 1.5, CELL - 3, CELL - 3);
+      g.strokeStyle = "rgba(253,186,116,0.45)";
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(px + 5, py + CELL - 5); g.lineTo(px + CELL - 5, py + 5);
+      g.stroke();
+    }
   }
 
   function drawObstacles() {
-    ctx.save();
-    for (let i = 0; i < obstacleCells.length; i++) {
-      const o = obstacleCells[i];
-      const px = o.x * CELL, py = o.y * CELL;
-      // 橙色实体砖：琥珀外发光 + 金属斜面 + 警示斜纹，和双方轨迹一眼区分
-      ctx.shadowColor = "rgba(251,146,60,0.55)";
-      ctx.shadowBlur = 9;
-      ctx.fillStyle = "rgba(120,53,15,0.62)";
-      ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "rgba(251,146,60,0.30)";
-      ctx.fillRect(px + 1, py + 1, CELL - 2, 3);
-      ctx.fillRect(px + 1, py + 1, 3, CELL - 2);
-      ctx.strokeStyle = "rgba(251,146,60,0.92)";
-      ctx.lineWidth = 1.2;
-      ctx.strokeRect(px + 1.5, py + 1.5, CELL - 3, CELL - 3);
-      ctx.strokeStyle = "rgba(253,186,116,0.45)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(px + 5, py + CELL - 5); ctx.lineTo(px + CELL - 5, py + 5);
-      ctx.stroke();
+    if (gameState === "replay") {
+      ctx.save();
+      paintObstacles(ctx, obstacleCells);
+      ctx.restore();
+      return;
     }
-    ctx.restore();
+    // setupMap 会新建 obstacleCells 数组，引用一变就重建缓存
+    if (obstacleCacheKey !== obstacleCells) {
+      if (!obstacleCache) {
+        obstacleCache = document.createElement("canvas");
+        obstacleCache.width = W;
+        obstacleCache.height = H;
+      }
+      const g = obstacleCache.getContext("2d");
+      g.clearRect(0, 0, W, H);
+      paintObstacles(g, obstacleCells);
+      obstacleCacheKey = obstacleCells;
+    }
+    ctx.drawImage(obstacleCache, 0, 0);
   }
 
   function drawBoundary() {
@@ -1922,19 +2029,50 @@
         if (!v) continue;
         const age = gameTime - trailTime[ci];
         const glow = Math.max(TRAIL_MIN_GLOW, 1 - age / TRAIL_FADE_MS);
+        // 量化到 16 档查表，避免每格现拼 rgba 字符串（全图上千格时开销很实在）
+        const step = ((glow - TRAIL_MIN_GLOW) / (1 - TRAIL_MIN_GLOW) * (TRAIL_STEPS - 1)) | 0;
+        const pal = TRAIL_COLORS[v === 1 ? 0 : 1];
         const px = x * CELL, py = y * CELL;
-        const pre = v === 1 ? COLORS[0].soft : COLORS[1].soft;
-        ctx.fillStyle = pre + (0.05 + 0.16 * glow) + ")";
+        ctx.fillStyle = pal.outer[step];
         ctx.fillRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
-        ctx.fillStyle = pre + (0.16 + 0.42 * glow) + ")";
+        ctx.fillStyle = pal.inner[step];
         ctx.fillRect(px + 3, py + 3, CELL - 6, CELL - 6);
       }
     }
   }
 
+  // 逻辑位置是格子整数，直接按格绘制会 80ms 跳 20px，看起来一顿一顿。
+  // 这里用「已到达的格 + 向下一格走的进度」做线性插值，方块在格间平滑滑行。
+  function renderPos(p) {
+    if (!p.alive) return { x: p.x, y: p.y };
+    const interval = p.interval || BASE_SPEED;
+    let t = (p.acc || 0) / interval;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    return { x: p.x + p.dir.x * t, y: p.y + p.dir.y * t };
+  }
+
+  // 插值后的方块会领先尾迹最多一格，补一段同色连接段，光轨看起来才跟手
+  function drawHeadLink(p) {
+    const t = Math.min(1, Math.max(0, (p.acc || 0) / (p.interval || BASE_SPEED)));
+    if (t <= 0.02) return;
+    const col = COLORS[p.id - 1];
+    const x0 = p.x * CELL + CELL / 2;
+    const y0 = p.y * CELL + CELL / 2;
+    const x1 = x0 + p.dir.x * t * CELL;
+    const y1 = y0 + p.dir.y * t * CELL;
+    ctx.strokeStyle = col.soft + "0.52)";
+    ctx.lineWidth = CELL - 6;
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+
   function drawPlayer(p) {
-    const cx = p.x * CELL + CELL / 2;
-    const cy = p.y * CELL + CELL / 2;
+    const rp = renderPos(p);
+    const cx = rp.x * CELL + CELL / 2;
+    const cy = rp.y * CELL + CELL / 2;
     const col = COLORS[p.id - 1];
     const spd = p.speedT || 0;
     const boosting = spd > 0.15;
@@ -1974,7 +2112,7 @@
     ctx.fill();
     ctx.restore();
 
-    ctx.fillStyle = p.queuedDir ? "#ffffff" : "#070b18";
+    ctx.fillStyle = (p.inputQueue && p.inputQueue.length) ? "#ffffff" : "#070b18";
     ctx.beginPath();
     ctx.arc(cx + p.dir.x * 3.2, cy + p.dir.y * 3.2, 2.6, 0, TAU);
     ctx.fill();
@@ -2120,6 +2258,8 @@
     drawObstacles();
     drawBoundary();
     drawTrails();
+    // 方块是插值绘制的，领先尾迹最多一格，补上连接段让光轨连成一体
+    for (let i = 0; i < players.length; i++) if (players[i].alive) drawHeadLink(players[i]);
     for (let i = 0; i < powerups.length; i++) drawPowerup(powerups[i]);
     for (let i = 0; i < players.length; i++) if (players[i].alive) drawPlayer(players[i]);
 
@@ -2219,6 +2359,8 @@
 
     if (gameState === "playing") {
       tickAcc += dt;
+      // 卡顿后不要把欠下的时间无限积压，否则下一次会连着快进一大段
+      if (tickAcc > TICK * 20) tickAcc = TICK * 20;
       let guard = 0;
       while (tickAcc >= TICK && guard < 20 && gameState === "playing") {
         tickAcc -= TICK;

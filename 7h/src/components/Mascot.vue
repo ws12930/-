@@ -104,7 +104,7 @@
     >⋯</button>
 
     <!-- 游戏窗口自己 teleport 到 body，放在这里只是借宿，不影响桌宠布局。
-         三个游戏各自独立开合，关掉即销毁 iframe，BGM 不会在后台接着响。 -->
+         四个游戏各自独立开合，关掉即销毁 iframe，BGM 不会在后台接着响。 -->
     <GameStage :open="gameOpen" @close="closeGame" />
     <GameStage
       :open="riftOpen"
@@ -125,6 +125,16 @@
       foot-left="双人轨迹对战 · 同屏对战"
       foot-right="关掉窗口即重新开局，战绩不存档"
       @close="closeGuanglun"
+    />
+    <GameStage
+      :open="tankOpen"
+      title="铁潮竞技场"
+      en="IRON RALLY"
+      :src="tankUrl"
+      auto-focus
+      foot-left="俯视角坦克对战 · 1~4 人 · 鼠标左键 / 空格开火"
+      foot-right="关掉窗口即重新开局，战绩不存档"
+      @close="closeTank"
     />
   </div>
 </template>
@@ -151,11 +161,12 @@
  *
  * 另外：本轮执行期间项目新增了第三个游戏「光轮」，当时 Mascot.vue 里只加了菜单按钮，
  * 函数 / GameStage / 样式都还没跟上；这里把它补全成和前两个游戏一致的完整链路。
+ * 第四个游戏「铁潮竞技场」沿用同一套链路：配置解析 → 菜单项 → GameStage → 关闭台词。
  */
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { readMe, isLogged } from '../utils/author'
-import { resolveRiftUrl, resolveGuanglunUrl } from '../utils/gameConfig'
+import { resolveRiftUrl, resolveGuanglunUrl, resolveTankUrl } from '../utils/gameConfig'
 import { EVT_SESSION_CHANGED, EVT_BLOG_SAVED } from '../utils/constants'
 import GameStage from './GameStage.vue'
 import MascotOverlays from './MascotOverlays.vue'
@@ -185,8 +196,10 @@ const menuOpen = ref(false)
 const gameOpen = ref(false)
 const riftOpen = ref(false)
 const guanglunOpen = ref(false)
+const tankOpen = ref(false)
 const riftUrl = resolveRiftUrl()
 const guanglunUrl = resolveGuanglunUrl()
+const tankUrl = resolveTankUrl()
 const meName = ref('')
 const hour = ref(new Date().getHours())
 const hovering = ref(false)
@@ -565,6 +578,7 @@ function onMenuAction(key) {
     playGame: () => (gameOpen.value = true),
     playRift: () => (riftOpen.value = true),
     playGuanglun: () => (guanglunOpen.value = true),
+    playTank: () => (tankOpen.value = true),
     jump: () => motion.playJump(undefined, true),
     wave: () => motion.react('wave'),
     sleep: () => {
@@ -640,6 +654,10 @@ function closeRift() {
 function closeGuanglun() {
   guanglunOpen.value = false
   speech.speak('光轮停下来了，歇会儿吧')
+}
+function closeTank() {
+  tankOpen.value = false
+  speech.speak('坦克收工啦，战场我帮你看着')
 }
 
 /** 浮层朝上放不下时翻到身体下方：拖到屏幕顶部菜单也能完整可点 */

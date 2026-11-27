@@ -51,6 +51,9 @@
         <button class="mc-play mc-play-3" type="button" role="menuitem" @click="act('playGuanglun')">
           <span class="mc-play-dot" aria-hidden="true">◈</span>光轮
         </button>
+        <button class="mc-play mc-play-4" type="button" role="menuitem" @click="act('playTank')">
+          <span class="mc-play-dot" aria-hidden="true">▣</span>铁潮竞技场
+        </button>
         <button type="button" role="menuitem" @click="act('next')">换个表情</button>
         <button type="button" role="menuitem" @click="act('jump')">跳一下</button>
         <button type="button" role="menuitem" @click="act('wave')">招个手</button>

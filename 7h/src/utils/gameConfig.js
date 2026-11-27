@@ -13,16 +13,18 @@
  *   3. 代码默认值：同源静态托管目录（public/game/、public/rift-clash/）。
  *      这是最稳的做法 —— 同源就没有 CORS、没有链接过期、探活也读得到状态码。
  *
- * 三个游戏各有一套配置：
- *   「七日回响」Galgame   → resolveGameUrl()
- *   「裂锋对决」格斗       → resolveRiftUrl()
- *   「光轮」双人轨迹对战   → resolveGuanglunUrl()
+ * 四个游戏各有一套配置：
+ *   「七日回响」Galgame     → resolveGameUrl()
+ *   「裂锋对决」格斗         → resolveRiftUrl()
+ *   「光轮」双人轨迹对战     → resolveGuanglunUrl()
+ *   「铁潮竞技场」坦克对战   → resolveTankUrl()
  */
 
 /** 同源托管目录（public/ 下的静态目录，打包后原样出现在 dist 根） */
 const DEFAULT_GAME_URL = './game/'
 const DEFAULT_RIFT_URL = './rift-clash/'
 const DEFAULT_GUANGLUN_URL = './guanglun/'
+const DEFAULT_TANK_URL = './tank-arena/'
 
 /** 探活最多等多久：超过就按「判断不了」放行，不能让用户对着面板干等 */
 const PROBE_TIMEOUT_MS = 4000
@@ -66,6 +68,11 @@ export function resolveRiftUrl() {
 /** 「光轮」地址（双人轨迹对战，单文件静态托管） */
 export function resolveGuanglunUrl() {
   return pick('__7H_GUANGLUN_URL__', 'VITE_GUANGLUN_URL', DEFAULT_GUANGLUN_URL)
+}
+
+/** 「铁潮竞技场」地址（俯视角坦克对战，单文件静态托管） */
+export function resolveTankUrl() {
+  return pick('__7H_TANK_URL__', 'VITE_TANK_URL', DEFAULT_TANK_URL)
 }
 
 /**

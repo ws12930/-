@@ -1,6 +1,12 @@
 <template>
   <div class="home">
-    <TopBar active="home" show-search v-model:keyword="keyword" @search="doSearch" />
+    <TopBar
+      active="home"
+      show-search
+      v-model:keyword="keyword"
+      v-model:category-id="categoryId"
+      @search="doSearch"
+    />
 
     <div class="pg-shell wide home-shell">
       <header class="pg-head">
@@ -33,7 +39,7 @@
       <div v-if="activeTab === 'all' && categories.length" class="chip-row">
         <button
           class="seg-btn"
-          :class="{ on: !activeCategory }"
+          :class="{ on: !categoryId }"
           type="button"
           @click="pickCategory(null)"
         >
@@ -43,7 +49,7 @@
           v-for="c in categories"
           :key="c.id"
           class="seg-btn"
-          :class="{ on: activeCategory === c.id }"
+          :class="{ on: categoryId === String(c.id) }"
           type="button"
           @click="pickCategory(c.id)"
         >
@@ -126,7 +132,8 @@ const router = useRouter()
 const posts = ref([])
 const categories = ref([])
 const activeTab = ref('all')
-const activeCategory = ref(null)
+/** 当前分类：'' 表示全部；顶栏下拉和下方分类按钮共用这一份状态 */
+const categoryId = ref('')
 const keyword = ref('')
 const appliedKeyword = ref('')
 const loading = ref(false)
@@ -181,7 +188,7 @@ async function load() {
     } else {
       res = await listPosts({
         ...params,
-        categoryId: activeCategory.value || undefined,
+        categoryId: categoryId.value || undefined,
         keyword: appliedKeyword.value || undefined
       })
     }
@@ -213,7 +220,8 @@ function pickTab(tab) {
 }
 
 function pickCategory(id) {
-  activeCategory.value = id
+  // id 为 null/undefined 时表示「全部」；下拉里的 value 是字符串，这里统一成字符串
+  categoryId.value = id == null ? '' : String(id)
   page.value = 1
   load()
 }

@@ -118,8 +118,23 @@ export function mascotVisibleOn(routeName) {
 export const POSTED = ['发布成功！这下大家都能看到了', '写完了，辛苦啦～', '恭喜，又一篇完成']
 export const DRAFTED = ['草稿存好啦，随时回来改', '先存着，慢慢改']
 export const SAVE_FAILED = ['保存好像没成功，再点一次试试？', '唔…这次没存上，检查下网络吧', '别急，内容还在，稍后再试一次']
+
+/**
+ * 编辑器保存结果（`blog:saved` 的 detail.status）→ 桌宠情绪动作。
+ * 与 useMascotSpeech.speakSaved 的归一化状态一一对应；集中成一张表，
+ * 以后加一种结果只改这里，不用去 Mascot.vue 里补 if/else。
+ * 备注来源：EditorView.vue 保存失败分支注明「桌宠据此播『沮丧』动作并说一句安慰」，
+ * useMascotMotion.react 注明 celebrate=任务完成 / failed=出错 / think=摸鱼。
+ */
+export const SAVED_REACTIONS = {
+  PUBLISHED: 'celebrate',
+  DRAFT: 'think',
+  ERROR: 'failed'
+}
 export const GRABBED = ['哎呀，轻点拎～', '把我放哪儿呀？', '诶——我还没站稳呢']
 export const DROPPED = ['放手吧，我就在这儿待着～', '这里视野不错！', `被你拎来拎去的啦——${NAME}`]
+/** 甩抛（松手速度够快时）：参考 dsh-pet 的甩抛手感，配一句被甩到的反应 */
+export const THROWN = ['哇——轻点甩！', '飞起来啦——', '晕了晕了…让我缓一下']
 
 /** 分时段问候 */
 export function daypartLine() {
@@ -161,7 +176,15 @@ export const LIVE_MAX_PER_ROUTE = 2      // 每个路由最多主动提醒几句
 export const SMALL_SCREEN_PX = 700       // 小屏自动收起阈值
 
 /** ===== 动作系统（idle / walk / jump / drag / land）===== */
-export const WALK_SPEED = 34              // 自主走动速度 px/s
+/**
+ * ===== 步频对齐（避免走路「滑行」）=====
+ * 一个 walk 循环是 8 帧 / 12fps ≈ 0.667s，素材视觉步幅约 22px；
+ * 位移速度由「步幅 ÷ 循环时长」反推，改帧率或步幅只改这三个数。
+ */
+export const WALK_CLIP_FRAMES = 8
+export const WALK_FPS = 12
+export const WALK_STRIDE_PX = 22
+export const WALK_SPEED = WALK_STRIDE_PX / (WALK_CLIP_FRAMES / WALK_FPS) // ≈33 px/s
 export const WALK_MIN_MS = 900            // 单次走动最短时长
 export const WALK_MAX_MS = 4200           // 单次走动最长时长（防止横穿整屏）
 export const WALK_MIN_PX = 46             // 单次走动最短距离
@@ -174,6 +197,34 @@ export const JUMP_AFTER_WALK = 0.22       // 走到目的地后顺势跳一下�
 export const JUMP_PX = 18                 // 跳跃高度
 export const JUMP_PX_TAP = 8              // 点击时轻跳的高度
 export const HOLD_RELEASE_MS = 1400       // 悬停 / 菜单关闭后恢复自主动作的延迟
+
+/** ===== 动作过渡 ===== */
+export const FADE_MS = 150                // 剪辑切换的交叉淡化时长（0 = 硬切）
+export const SQUASH_MS = 260              // 点击 Q 弹挤压的恢复时长
+export const SQUASH_X = 1.085             // 挤压横向峰值
+export const SQUASH_Y = 0.905             // 挤压纵向峰值
+export const HOVER_LEAN = 1.6             // 悬停时朝鼠标微倾的角度（deg）
+
+/** ===== 待机 / 打盹 =====
+ * 参考 Shimeji 的「空闲行为链」与 dsh-pet 的睡觉状态：交互后安静一段时间，
+ * 先抽发呆 / 招手，再久一点就打盹；任一交互立即唤醒。深夜阈值更短。
+ */
+export const BOREDOM_NAP_MS = 96000       // 白天：无交互多久开始打盹
+export const BOREDOM_NAP_MS_NIGHT = 24000 // 深夜：更快入睡
+export const NAP_MIN_MS = 9000            // 打盹至少睡这么久（中途被点也会醒，只是不弹台词）
+export const ACTION_COOLDOWN_MS = 14000   // 同一个待机小动作的最短重复间隔
+
+/** ===== 甩抛物理（参考 dsh-pet / Shimeji 的拖拽甩抛）===== */
+export const THROW_MIN_V = 0.45           // 松手速度阈值 px/ms，低于它算普通放下
+export const THROW_MAX_V = 3.2            // 速度上限，防止一把甩到天外
+export const THROW_FRICTION = 0.9         // 每 16ms 速度衰减
+export const THROW_BOUNCE = 0.55          // 撞到视口边缘的回弹系数
+export const THROW_MAX_MS = 900           // 惯性最长持续
+export const THROW_LIFT_PX = 26           // 甩出时的离地高度
+
+/** ===== 点击部位（参考 Shimeji 的交互热点）===== */
+export const POKE_UPPER_RATIO = 0.56      // 点击点落在身体高度这个比例以上算「摸头」
+export const POKE_COOLDOWN_MS = 700       // 连点保护，避免疯狂触发
 
 /**
  * 播放倍速档位。参考 dsh-desktop-pet 的 animationSpeed（0.25–4）与
@@ -197,6 +248,7 @@ export const DEFAULT_SETTINGS = {
   faceSet: 'all',      // all = 三张表情；soft = 只用「欢迎 / 加油写文」两张
   motion: true,        // 动态动作总开关：关掉后退回单帧静态图（等同旧版观感）
   roam: true,          // 自由走动：关掉后只在原地待机 / 偶尔跳一下
+  nap: true,           // 待机打盹：长时间无交互自动睡着，点一下叫醒
   speed: 1             // 播放倍速：0.5 / 1 / 1.5 / 2（帧延迟等比例缩放）
 }
 

@@ -12,7 +12,7 @@
         dragging: position.dragging.value,
         mini,
         muted,
-        sleeping,
+        sleeping: napping,
         hovering,
         'is-eco': settings.eco,
         'is-roaming': motion.state.value === 'walk'
@@ -32,6 +32,7 @@
       :dragging="position.dragging.value"
       :muted="muted"
       :mini="mini"
+      :napping="motion.sleeping.value"
       :settings="settings"
       @dismiss-bubble="speech.dismissBubble()"
       @close-menu="closeMenu"
@@ -71,8 +72,8 @@
       :aria-expanded="menuOpen"
       aria-controls="mc-menu"
       @pointerdown="onDown"
+      @pointermove="onHoverMove"
       @click="onTap"
-      @dblclick="toggleMini(true)"
       @contextmenu.prevent="openMenu($event.currentTarget)"
       @mouseenter="onEnter"
       @mouseleave="onLeave"
@@ -85,8 +86,9 @@
         :loop="motion.clip.value.loop"
         :paused="motion.frozen.value"
         :playback-rate="motion.playbackRate.value"
+        :fade-ms="fadeMs"
       />
-      <span v-if="sleeping" class="mc-zzz">Zzz</span>
+      <span v-if="napping" class="mc-zzz">Zzz</span>
       <span v-if="muted" class="mc-mute">静音</span>
     </button>
 
@@ -152,16 +154,16 @@
  */
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { readMe } from '../utils/author'
+import { readMe, isLogged } from '../utils/author'
 import { resolveRiftUrl, resolveGuanglunUrl } from '../utils/gameConfig'
 import { EVT_SESSION_CHANGED, EVT_BLOG_SAVED } from '../utils/constants'
 import GameStage from './GameStage.vue'
 import MascotOverlays from './MascotOverlays.vue'
 import MascotSprite from './MascotSprite.vue'
 import {
-  FACES, SCENE_LINES, GRABBED, DROPPED, daypartLine, facePool,
-  DEFAULT_SETTINGS, SMALL_SCREEN_PX, LONG_PRESS_MS,
-  IDLE_MS, TAP_DELAY_MS, MOVE_THRESHOLD, HOUR_TICK_MS,
+  FACES, SCENE_LINES, GRABBED, DROPPED, THROWN, daypartLine, facePool,
+  SAVED_REACTIONS, DEFAULT_SETTINGS, SMALL_SCREEN_PX, LONG_PRESS_MS,
+  IDLE_MS, TAP_DELAY_MS, MOVE_THRESHOLD, HOUR_TICK_MS, BUBBLE_MS, FADE_MS, THROW_MIN_V,
   RESIZE_DEBOUNCE_MS, MIN_GAP, TOP_LIMIT, OVERLAY_SAFE_GAP, OVERLAY_ESTIMATE_PX
 } from '../mascot/config'
 import { useMascotTimers } from '../mascot/useMascotTimers'
@@ -169,7 +171,7 @@ import { useMascotSpeech } from '../mascot/useMascotSpeech'
 import { useMascotPosition } from '../mascot/useMascotPosition'
 import { useMascotLive } from '../mascot/useMascotLive'
 import { useMascotMotion } from '../mascot/useMascotMotion'
-import { preloadMotion } from '../mascot/animations'
+import { preloadMotion, preloadPrimary } from '../mascot/assets'
 import '../assets/mascot.css'
 
 const route = useRoute()
@@ -195,7 +197,10 @@ const settings = reactive({ ...DEFAULT_SETTINGS })
 
 const pool = computed(() => facePool(settings.faceSet))
 const face = computed(() => pool.value[idx.value % pool.value.length] || FACES[0])
-const sleeping = computed(() => hour.value >= 23 || hour.value < 6)
+// 深夜（23:00–06:00）：待机换成 sleep 剪辑、压暗、Zzz；与「无聊打盹」分开判断
+const nightTime = computed(() => hour.value >= 23 || hour.value < 6)
+// 状态切换的交叉淡化：省电模式下直接硬切，省掉一层合成
+const fadeMs = computed(() => (settings.eco ? 0 : FADE_MS))
 
 const timers = useMascotTimers()
 const speech = useMascotSpeech({ timers, getFace: () => face.value, isMuted: muted, isMini: mini, route })
@@ -212,7 +217,13 @@ const position = useMascotPosition({
     timers.timeout(() => (warn.value = ''), 6000)
   }
 })
-const live = useMascotLive({ timers, speak: speech.speak, isMuted: muted, isMini: mini })
+const live = useMascotLive({
+  timers,
+  speak: speech.speak,
+  react: (kind) => motion.react(kind),
+  isMuted: muted,
+  isMini: mini
+})
 
 /**
  * 动作系统。帧动画负责姿态，lean / lift 负责整体倾斜与离地高度，
@@ -223,9 +234,13 @@ const motion = useMascotMotion({
   position,
   settings,
   isMini: mini,
-  isSleepy: sleeping,
+  isSleepy: nightTime,
+  routeName: computed(() => route.name),
   faceKey: computed(() => face.value.key || 'welcome')
 })
+
+// 打盹（状态机）或深夜都显示睡姿；两者来源不同，视觉上统一成 sleeping
+const napping = computed(() => motion.sleeping.value || nightTime.value)
 
 const rootStyle = computed(() => ({
   ...position.posStyle.value,
@@ -233,10 +248,12 @@ const rootStyle = computed(() => ({
   '--mc-opacity': String(settings.opacity)
 }))
 
-/** 身体容器的动态变量：走动倾斜 + 跳跃高度，由 CSS transform 消费 */
+/** 身体容器的动态变量：走动倾斜 + 跳跃高度 + 点击 Q 弹，由 CSS transform 消费 */
 const bodyStyle = computed(() => ({
   '--mc-lean': `${motion.lean.value}deg`,
-  '--mc-lift': `${motion.lift.value}px`
+  '--mc-lift': `${motion.lift.value}px`,
+  '--mc-squash-x': String(motion.squashX.value),
+  '--mc-squash-y': String(motion.squashY.value)
 }))
 
 // ---- 定时器总排程：pause 一次全清，resume 只从这一处重新起一套，杜绝叠链 ----
@@ -246,6 +263,9 @@ let tapId = null
 let scrollRaf = null
 let readFired = false
 let userExpanded = false
+// 保存反馈的保护窗口：EditorView 保存后会立刻跳路由，路由 watch 的场景台词
+// 会把「发布成功 / 没存上」顶掉；这段时间内挂起场景台词，让情绪动作演完。
+let sceneSpeechGuardUntil = 0
 
 function restartRotate() {
   timers.clear(rotateId)
@@ -289,12 +309,39 @@ function onVisibility() {
 function onEnter() {
   hovering.value = true
   showCard.value = true
+  motion.markInteract() // 人来了就算互动，重置打盹计时
   motion.hold('hover')
 }
 function onLeave() {
   hovering.value = false
   showCard.value = false
+  motion.hoverTilt(0)
   motion.release('hover')
+}
+
+/**
+ * 悬停时朝鼠标方向轻微偏一下（只影响 idle 姿态）。
+ * lean 只在方向真正变化时才写，pointermove 的高频不会带来额外渲染。
+ */
+function onHoverMove(e) {
+  if (position.dragging.value || mini.value) return
+  const rect = petEl.value?.getBoundingClientRect()
+  if (!rect) return
+  const mid = rect.left + rect.width / 2
+  motion.hoverTilt(e.clientX < mid ? -1 : 1)
+}
+
+/** 叫醒：状态机负责切回 idle + 招手，台词按是否用户主动唤醒决定 */
+function wakeUp(greet = true) {
+  if (!motion.wake(greet)) return false
+  if (greet) {
+    speech.speak(speech.pickFresh([
+      '唔…我醒啦～',
+      '被你叫醒了，我刚刚打了个小盹',
+      '醒了醒了，有事找我吗？'
+    ]))
+  }
+  return true
 }
 
 // ---- 表情 / 场景 ----
@@ -334,6 +381,17 @@ let longPressId = null
 let longPressFired = false
 let suppressTap = false
 let dotStart = null
+let lastTapAt = 0
+let moveSamples = [] // 最近几次指针位置，用来算松手速度（甩抛）
+
+/** 松手速度 px/ms：取最近约 6 个采样点的平均，比「最后两点」稳一些 */
+function dragVelocity() {
+  if (moveSamples.length < 2) return { vx: 0, vy: 0 }
+  const a = moveSamples[0]
+  const b = moveSamples[moveSamples.length - 1]
+  const dt = Math.max(8, b.t - a.t)
+  return { vx: (b.x - a.x) / dt, vy: (b.y - a.y) / dt }
+}
 
 function onDown(e) {
   // 右键 pointerdown 会和 contextmenu 同时发生，原来会把菜单弹出后的移动也当成拖拽
@@ -341,6 +399,8 @@ function onDown(e) {
   if (mini.value) return
   suppressTap = false // 每次按下重置，避免上次未消费的标记吞掉这次单击
   longPressFired = false
+  moveSamples = []
+  motion.markInteract()
   longPressId = timers.timeout(() => {
     longPressFired = true
     openMenu(petEl.value)
@@ -396,6 +456,10 @@ function onMove(e) {
     speech.speak(speech.pickFresh(GRABBED))
   }
   if (downInfo.moved) {
+    // 采样指针轨迹：松手时用它算甩抛初速度
+    const now = performance.now()
+    moveSamples.push({ t: now, x: e.clientX, y: e.clientY })
+    if (moveSamples.length > 6) moveSamples.shift()
     const { w, h } = position.dims()
     pending = {
       x: Math.min(Math.max(downInfo.x0 + dx, MIN_GAP), Math.max(MIN_GAP, window.innerWidth - w - MIN_GAP)),
@@ -422,11 +486,18 @@ function onUp() {
   pending = null
   const moved = !!downInfo?.moved
   if (moved) {
-    position.snap()
-    position.save()
-    motion.endDrag() // 落地缓冲帧播完再回到 idle
-    speech.speak(speech.pickFresh(DROPPED))
+    const vel = dragVelocity()
+    const strong = Math.hypot(vel.vx, vel.vy) >= THROW_MIN_V
+    // 快甩交给状态机的甩抛物理；慢放才走「靠边吸附 + 落地缓冲」，
+    // 否则松手瞬间先吸附到边缘，甩出去会从错误的位置起跳。
+    if (!strong) {
+      position.snap()
+    }
+    position.save() // 无论哪种收尾都先落一次盘，甩抛中途刷新也不会回到旧位置
+    motion.endDrag(vel.vx, vel.vy)
+    speech.speak(speech.pickFresh(strong ? THROWN : DROPPED))
   }
+  moveSamples = []
   // 拖拽 / 长按结束后浏览器仍会派发 click：这里立标记，让 onTap 消费掉这一次，
   // 否则放下后 260ms 又会冒出一句场景话，把刚说的「放手吧」顶掉。
   suppressTap = moved || longPressFired
@@ -435,10 +506,32 @@ function onUp() {
   updateOverlayPlacement()
 }
 
-function onTap() {
+function onTap(e) {
   if (position.dragging.value) return
   if (suppressTap) { suppressTap = false; return }
-  motion.nudge() // 被戳到轻轻蹦一下，先给动作反馈，再等台词
+  if (mini.value) return
+
+  const now = Date.now()
+  // 双击收起：桌面与触屏共用一套判断（触屏上 dblclick 不可靠，会漏掉）
+  if (now - lastTapAt < 320) {
+    lastTapAt = 0
+    timers.clear(tapId)
+    toggleMini(true)
+    return
+  }
+  lastTapAt = now
+
+  // 睡着时点一下 = 叫醒，不播普通点击反应
+  if (motion.sleeping.value) {
+    wakeUp(true)
+    return
+  }
+
+  // 按点击部位选反应：上半身算「摸头」，下半身更容易蹦一下（参考 Shimeji 的交互热点）
+  const rect = petEl.value?.getBoundingClientRect()
+  const ratio = rect ? (e.clientY - rect.top) / Math.max(1, rect.height) : 0.6
+  motion.pokeAt(ratio) // Q 弹挤压 + 随机反应，先给动作反馈，再等台词
+
   timers.clear(tapId)
   tapId = timers.timeout(() => {
     if (mini.value) return
@@ -473,6 +566,11 @@ function onMenuAction(key) {
     playRift: () => (riftOpen.value = true),
     playGuanglun: () => (guanglunOpen.value = true),
     jump: () => motion.playJump(undefined, true),
+    wave: () => motion.react('wave'),
+    sleep: () => {
+      if (motion.sleep()) speech.speak('那我眯一会儿，有事叫我～')
+    },
+    wake: () => wakeUp(true),
     next,
     toggleMute,
     resetPos,
@@ -507,6 +605,7 @@ function toggleMini(v) {
     userExpanded = true
     resumeAll()
     speech.speak('我回来啦～')
+    motion.react('wave')
   }
 }
 function hide() {
@@ -520,6 +619,7 @@ function restore() {
   position.save()
   resumeAll()
   speech.speak('我回来啦～')
+  motion.react('wave')
 }
 function changeSetting({ key, value }) {
   if (!(key in settings)) return
@@ -556,7 +656,8 @@ watch([menuOpen, () => speech.showBubble.value, showCard], updateOverlayPlacemen
 // 换表情后顺手预热新表情的动作帧，下一次走动 / 跳跃才不会卡一拍
 watch(() => face.value.key, (key) => key && preloadMotion(key))
 
-// ---- 用户昵称：storage 事件不覆盖本标签页，补一条自定义事件 ----
+// ---- 用户昵称 / 登录态：storage 事件不覆盖本标签页，补一条自定义事件 ----
+let wasLogged = false
 function refreshMe() {
   try {
     meName.value = readMe()?.nickname || ''
@@ -564,6 +665,20 @@ function refreshMe() {
     meName.value = ''
   }
   live.resetSession()
+}
+
+/**
+ * 登录态跃迁时打个招呼（react 的备注里 wave = 打招呼）。
+ * 只在「未登录 → 已登录」时挥手，资料更新 / 登出都不动，免得变成条件反射式打扰。
+ */
+function onSessionChanged() {
+  const nowLogged = isLogged()
+  refreshMe()
+  if (!wasLogged && nowLogged) {
+    motion.react('wave')
+    speech.speak(meName.value ? `${meName.value}，欢迎回来呀～` : '欢迎回来呀～')
+  }
+  wasLogged = nowLogged
 }
 
 // ---- 视口变化 ----
@@ -584,8 +699,18 @@ function onResize() {
   }, RESIZE_DEBOUNCE_MS)
 }
 
+/**
+ * 编辑器保存结果 → 台词 + 情绪动作（按 EditorView 与 useMascotMotion 里的备注补齐）：
+ *   发布成功 celebrate / 存草稿 think / 保存失败 failed + 安慰台词。
+ * 旧版只调 speakSaved，react() 与 SAVE_FAILED 台词都是「备好了但没接上」。
+ */
 function onBlogSaved(e) {
-  speech.speakSaved(e?.detail?.status)
+  // 打盹时被业务反馈叫醒：先说结果，再演动作（wake(false) 不招手，避免和 celebrate 抢）
+  if (motion.sleeping.value) motion.wake(false)
+  const kind = speech.speakSaved(e?.detail?.status)
+  sceneSpeechGuardUntil = Date.now() + BUBBLE_MS
+  const action = SAVED_REACTIONS[kind]
+  if (action) motion.react(action)
 }
 
 // ---- 路由联动 ----
@@ -599,7 +724,7 @@ watch(
     if (mini.value) return
     applySceneFace()
     const lines = SCENE_LINES[route.name] || []
-    if (lines.length) {
+    if (lines.length && Date.now() >= sceneSpeechGuardUntil) {
       const t = speech.pickFresh(lines)
       speech.speak(meName.value && Math.random() < 0.4 ? `${meName.value}，${t}` : t)
     }
@@ -610,6 +735,7 @@ watch(
 onMounted(() => {
   position.load() // 内部会 clamp 一次，并回填 mini / muted / settings
   refreshMe()
+  wasLogged = isLogged()
   if (window.innerWidth < SMALL_SCREEN_PX) mini.value = true
   if (!position.pos.value) position.side.value = 'right'
   document.documentElement.classList.toggle('eco-mode', settings.eco)
@@ -618,12 +744,13 @@ onMounted(() => {
   const im = new Image()
   im.decoding = 'async'
   im.src = face.value.img
-  // 动作帧条在空闲时预热，避免第一次走动 / 跳跃时画面空一拍
+  // 首屏只等当前表情的 idle 帧条；其余动作等静态图解码完再分批空闲预热
+  preloadPrimary(face.value.key)
   preloadMotion(face.value.key)
 
   window.addEventListener('resize', onResize)
-  window.addEventListener('storage', refreshMe)
-  window.addEventListener(EVT_SESSION_CHANGED, refreshMe)
+  window.addEventListener('storage', onSessionChanged)
+  window.addEventListener(EVT_SESSION_CHANGED, onSessionChanged)
   window.addEventListener(EVT_BLOG_SAVED, onBlogSaved)
   document.addEventListener('visibilitychange', onVisibility)
   document.addEventListener('keydown', onGlobalKey)
@@ -635,6 +762,7 @@ onMounted(() => {
     applySceneFace()
     speech.speak(meName.value ? `${meName.value}，${daypartLine()}` : daypartLine())
     resumeAll()
+    motion.react('wave') // 首屏问候配一个招手，别只是干巴巴地说话
   }
 })
 
@@ -643,8 +771,8 @@ onBeforeUnmount(() => {
   timers.clearAll()
   document.documentElement.classList.remove('eco-mode')
   window.removeEventListener('resize', onResize)
-  window.removeEventListener('storage', refreshMe)
-  window.removeEventListener(EVT_SESSION_CHANGED, refreshMe)
+  window.removeEventListener('storage', onSessionChanged)
+  window.removeEventListener(EVT_SESSION_CHANGED, onSessionChanged)
   window.removeEventListener(EVT_BLOG_SAVED, onBlogSaved)
   window.removeEventListener('scroll', onScroll)
   window.removeEventListener('pointermove', onMove)

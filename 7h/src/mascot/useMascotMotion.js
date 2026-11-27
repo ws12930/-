@@ -1,34 +1,35 @@
 /**
- * 桌宠动作状态机。
+ * 桌宠动作状态机（第二轮改造）。
  *
- * 之前的「动作」只有几段 CSS keyframes（is-peek / is-hop / is-sway）随机播放，
- * 没有状态、没有优先级、也没有位移，表现上就是「原地抖一下」。这里换成一个
- * 显式的有限状态机，把「姿态动画」和「位置 / 高度」分开：
+ * 相比上一版，这一版把「动作」从零散函数收成一条统一的调度链，参考了两套开源实现：
  *
- *   state   idle | walk | jump | drag | land | wave | celebrate | think | failed
- *   lean    整体倾斜（deg）——走动时朝行进方向压一点，交给 CSS transform
- *   lift    离地高度（px）——跳跃时按抛物线抬升，交给 CSS translateY
+ * 1. **Shimeji-ee**（BSD-2-Clause）的 Behavior / Action：
+ *    高层行为结束后从带权重的 NextBehaviorList 抽下一步，Action 由「Pose + 速度 + 时长」组成。
+ *    这里对应成 actions.js 的 `behaviorWeights()`（按页面 / 时段 / 无聊度调权重）
+ *    + `ACTION_DEFS`（优先级、一次性、可打断），并由 `request()` 统一裁决。
+ * 2. **dsh-pet**（MIT）的物理手感与状态：
+ *    点击 Q 弹挤压、拖拽甩抛 + 边缘反弹、空闲打盹、动作首尾相接不硬切。
  *
- * 帧动画只负责挤压 / 拉伸 / 呼吸，位移由这里算，所以：
- *   - 换素材不用改位移逻辑，换位移也不用重烘焙帧；
- *   - 拖拽时用户的手永远优先，任何自主动作都会被 beginDrag() 立刻掐断；
- *   - 所有定时器都走 useMascotTimers，收起 / 切后台 / 卸载时一起清干净。
+ * 状态集：idle / sleep / walk / think / wave / jump / throw / celebrate / failed / land / drag
+ * 优先级：drag(100) > land(60) > celebrate·failed(50) > throw(45) > jump(40)
+ *         > think·wave(30) > walk(20) > sleep(5) > idle(0)
  *
- * ===== 动作集参考 DSH（DeepSeek Harness）桌宠插件 =====
- * Practice019/dsh-kun-like-pet（MIT）用 9 个状态随工作状态切换；
- * sereinmono/dsh-desktop-pet（MIT）把状态收敛成语义状态、按优先级折叠、
- * 瞬时状态 2s 后自动回到 IDLE；PC2005-cloud/dsh-pet（MIT）把上百段动画
- * 按权重首尾衔接，点击还会随机给不同反应。这里对应落地成：
- *   - 一次性动作（wave / celebrate / think / failed / jump / land）播完自动回 idle，
- *     等价于 dsh-desktop-pet 的「瞬时状态回归」；
- *   - 拖拽 > 落地 > 一次性动作 > 走动 > 待机 的抢占顺序，等价于它的优先级折叠；
- *   - 待机久了按权重抽一个小动作，点击也按权重给不同反应，等价于 dsh-pet 的权重衔接。
- *
- * hover / 菜单打开视为「暂时挂起」：不再起新的自主动作，但不打断正在播的一次性动作
- * （跳跃会自然落地、招手会挥完），避免鼠标一放上去就「僵住」。
+ * 三条不可破坏的约束（沿用旧版语义）：
+ *  - 用户的手永远优先：beginDrag() 直接清掉在途 rAF 与排程；
+ *  - 不可打断的一次性动作播完再回 idle，高优先级事件进「待播队列」而不是丢失；
+ *  - 所有定时器 / rAF 都走 useMascotTimers，收起、切后台、卸载时一起清。
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { resolveClip, clipDuration, IDLE_VARIANTS } from './animations'
+import { resolveClip, clipDuration } from './animations'
+import {
+  ACTION_DEFS,
+  canStart,
+  pickWeighted,
+  behaviorWeights,
+  filterCooled,
+  createCooldowns,
+  POKE_REACTIONS
+} from './actions'
 import {
   WALK_SPEED,
   WALK_MIN_MS,
@@ -45,46 +46,58 @@ import {
   HOLD_RELEASE_MS,
   MIN_GAP,
   SPEED_MIN,
-  SPEED_MAX
+  SPEED_MAX,
+  SQUASH_MS,
+  SQUASH_X,
+  SQUASH_Y,
+  HOVER_LEAN,
+  BOREDOM_NAP_MS,
+  BOREDOM_NAP_MS_NIGHT,
+  NAP_MIN_MS,
+  THROW_MIN_V,
+  THROW_MAX_V,
+  THROW_FRICTION,
+  THROW_BOUNCE,
+  THROW_MAX_MS,
+  THROW_LIFT_PX,
+  POKE_UPPER_RATIO,
+  POKE_COOLDOWN_MS
 } from './config'
 
 const rand = (a, b) => a + Math.random() * (b - a)
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b)
 
-/** 点击时的随机反应（参考 dsh-pet：同一个点击动作有好几种表现） */
-const POKE_REACTIONS = [
-  { state: 'wave', weight: 46 },
-  { state: 'jump', weight: 34 },
-  { state: 'think', weight: 20 }
-]
+/** 由位移逻辑自己收尾的状态：不排「播完回 idle」的定时器 */
+const MANUAL_STATES = new Set(['idle', 'walk', 'jump', 'throw', 'drag', 'sleep'])
 
-/** 按权重抽一项，权重为 0 或空表时退回第一项 */
-function pickWeighted(list) {
-  if (!list || !list.length) return null
-  const total = list.reduce((s, it) => s + (it.weight || 0), 0)
-  if (total <= 0) return list[0]
-  let r = Math.random() * total
-  for (const it of list) {
-    r -= it.weight || 0
-    if (r <= 0) return it
-  }
-  return list[list.length - 1]
-}
-
-export function useMascotMotion({ timers, position, faceKey, settings, isMini, isSleepy }) {
+export function useMascotMotion({ timers, position, faceKey, settings, isMini, isSleepy, routeName }) {
   const state = ref('idle')
   const facing = ref('right')
   const lean = ref(0)
   const lift = ref(0)
   const paused = ref(false)
+  const sleeping = ref(false) // 打盹（与「深夜待机用 sleep 剪辑」区分）
+  const squashX = ref(1)
+  const squashY = ref(1)
+  const boredom = ref(0)
 
   let rafId = null
   let roamId = null
-  let settleId = null // 一次性动作「播完回 idle」的定时器（land / wave / celebrate / ...）
+  let settleId = null
+  let napId = null
+  let wakeId = null
+  let squashRaf = null
   let hoverHold = false
   let menuHold = false
   let dragging = false
   let disposed = false
+  let pendingOneShot = null
+  let lastInteractAt = Date.now()
+  let pausedAt = 0
+  let lastPokeAt = 0
+
+  const cooldowns = createCooldowns()
 
   // 系统「减少动态效果」：保留呼吸（放慢），但不再自主走动 / 跳跃
   const reduced = ref(false)
@@ -94,15 +107,19 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
   const onMq = (e) => { reduced.value = e.matches }
   if (mq) {
     reduced.value = mq.matches
-    mq.addEventListener?.('change', onMq)
+    // Safari 13 只有 addListener，没有 addEventListener
+    if (mq.addEventListener) mq.addEventListener('change', onMq)
+    else if (mq.addListener) mq.addListener(onMq)
   }
 
   const eco = computed(() => !!settings.eco)
   const motionOn = computed(() => settings.motion !== false)
   const roamOn = computed(() => settings.roam !== false)
+  const napOn = computed(() => settings.nap !== false)
+
   /**
-   * 播放倍速：用户设置（0.5–2x，参考 dsh-desktop-pet 的 animationSpeed 0.25–4）
-   * 再乘上系统「减少动态」的 0.55 折。播放器直接把倍速折算进帧延迟，不叠加定时器。
+   * 播放倍速：用户设置（0.5–2x）再乘上系统「减少动态」的 0.55 折。
+   * 播放器把倍速折算进帧延迟，状态机的「播完回 idle」与跳跃位移也按同一个倍速缩放。
    */
   const playbackRate = computed(() => {
     const user = Math.min(SPEED_MAX, Math.max(SPEED_MIN, Number(settings.speed) || 1))
@@ -115,8 +132,13 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     eco: eco.value
   }))
 
-  /** 播放器是否应该停住（省电 / 关掉动态动作 / 外部暂停） */
   const frozen = computed(() => paused.value || !motionOn.value || eco.value)
+
+  /** 0–1 的无聊度：深夜里阈值更短，用来调自主动作的权重 */
+  function boredom01() {
+    const span = isSleepy.value ? BOREDOM_NAP_MS_NIGHT : BOREDOM_NAP_MS
+    return clamp((Date.now() - lastInteractAt) / Math.max(1000, span), 0, 1)
+  }
 
   function blocked() {
     return disposed || paused.value || dragging || hoverHold || menuHold ||
@@ -135,11 +157,27 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     timers.clear(settleId)
     settleId = null
   }
+  function clearNap() {
+    timers.clear(napId)
+    napId = null
+  }
+  function clearWake() {
+    timers.clear(wakeId)
+    wakeId = null
+  }
 
-  function settleIdle(extraLift = 0) {
+  function settleIdle() {
     state.value = 'idle'
     lean.value = 0
-    lift.value = extraLift
+    lift.value = 0
+    // 高优先级动作被打断时排进队列的一次性动作，回 idle 后再补播
+    const next = pendingOneShot
+    pendingOneShot = null
+    if (next) {
+      timers.timeout(() => {
+        if (state.value === 'idle' && !blocked()) playOneShot(next, true)
+      }, 30)
+    }
   }
 
   /** 排下一次自主动作；被挂起时先不排，等 release() 再来 */
@@ -150,54 +188,90 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
   }
 
   /**
-   * 一次性动作的统一入口：切状态 + 按剪辑时长排「回 idle」。
-   * 等价于 dsh-desktop-pet 的瞬时状态（SUCCESS / ERROR / STARTING）2s 后回归 IDLE，
-   * 只是这里的时长跟着素材走，换帧率不会让动作被切断。
+   * 统一的切状态入口：清在途调度、写 state、按需排「播完回 idle」。
+   * 与旧版的区别是「谁能切」由 actions.canStart 决定，不再散落在各函数里。
    */
-  function playOneShot(name, force = false) {
-    if (disposed || paused.value || dragging) return
-    if (!clipDuration(name)) return
-    if (!force) {
-      if (blocked()) return
-      if (state.value !== 'idle') return
-    }
+  function enterState(name) {
+    const prev = state.value
     clearRaf()
     clearRoam()
     clearSettle()
+    if (prev === 'walk') position.save()
     state.value = name
-    lean.value = 0
-    lift.value = 0
-    // +60ms 余量：播放器最后一帧的定时器可能比这里晚一两个 tick，
-    // 提前切回 idle 会让最后那帧看不到。
-    settleId = timers.timeout(() => {
-      settleId = null
-      if (state.value === name) {
+    if (name !== 'drag') {
+      lean.value = 0
+      lift.value = 0
+    }
+    if (name === 'sleep') sleeping.value = true
+    else if (name !== 'drag') sleeping.value = false
+
+    const def = ACTION_DEFS[name]
+    if (def?.oneShot && !MANUAL_STATES.has(name)) {
+      // +60ms 余量：播放器最后一帧可能晚一两个 tick；倍速要一起折进来
+      settleId = timers.timeout(() => {
+        settleId = null
+        if (state.value !== name) return
+        settleIdle()
+        schedule()
+      }, clipDuration(name) / Math.max(0.1, playbackRate.value || 1) + 60)
+    }
+  }
+
+  /**
+   * 请求切到某个动作。
+   * 被拒绝时，如果当前是「不可打断的一次性动作」而请求方也是一次性动作，
+   * 就排进 pending（最多 1 个），等它播完再补——业务反馈不再被直接丢掉。
+   */
+  function request(name, { force = false } = {}) {
+    if (disposed || paused.value) return false
+    if (!ACTION_DEFS[name]) return false
+    if (name === state.value) return false
+    if (dragging && name !== 'land' && name !== 'drag') return false
+
+    if (!canStart(state.value, name, { force })) {
+      const cur = ACTION_DEFS[state.value]
+      if (!force && ACTION_DEFS[name].oneShot && cur?.oneShot && !pendingOneShot) {
+        pendingOneShot = name
+      }
+      return false
+    }
+    enterState(name)
+    return true
+  }
+
+  function playOneShot(name, force = false) {
+    return request(name, { force })
+  }
+
+  /**
+   * 跳跃：动画帧负责蓄力 / 拉伸 / 落地缓冲，位移用一条正弦抛物曲线。
+   * 起跳前 16% 的时间是蓄力（帧里人物在蹲），所以 lift 延迟 16% 再开始抬升。
+   */
+  function playJump(height = JUMP_PX, force = false) {
+    if (!request('jump', { force })) return false
+    const dur = clipDuration('jump') / Math.max(0.1, playbackRate.value || 1)
+    const t0 = performance.now()
+    const step = (now) => {
+      rafId = null
+      if (state.value !== 'jump' || disposed) return
+      const t = Math.min(1, (now - t0) / dur)
+      const air = Math.max(0, Math.min(1, (t - 0.16) / 0.62))
+      lift.value = Math.sin(Math.PI * air) * height
+      if (t < 1 && !paused.value) rafId = timers.raf(step)
+      else {
         settleIdle()
         schedule()
       }
-    }, clipDuration(name) + 60)
-  }
-
-  function behave() {
-    roamId = null
-    if (blocked()) return
-    // 深夜 / 系统要求减少动态：只呼吸，不折腾
-    if (isSleepy.value || reduced.value) {
-      schedule(rand(ROAM_MIN_MS, ROAM_MAX_MS))
-      return
     }
-    const roll = Math.random()
-    if (roamOn.value && roll < 0.54) startWalk()
-    else if (roll < 0.76) playJump(JUMP_PX)
-    // 其余情况抽一个待机小动作（发呆 / 招手），不是每次都动，留点安静的空隙
-    else playOneShot(pickWeighted(IDLE_VARIANTS)?.state)
+    rafId = timers.raf(step)
+    return true
   }
 
-  // ---- 走动：匀速 + 缓入缓出，位置直接写回 position.pos，和拖拽共用同一套 clamp ----
+  // ---- 走动：匀速 + 缓入缓出，位置直接写回 position.pos ----
   function startWalk() {
-    if (blocked() || state.value !== 'idle') return
+    if (blocked() || state.value !== 'idle') return false
     const base = position.pos.value || position.defaultPos()
-    if (!base) return
+    if (!base) return false
     const { w } = position.dims()
     const minX = MIN_GAP
     const maxX = Math.max(MIN_GAP, window.innerWidth - w - MIN_GAP)
@@ -210,31 +284,27 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     const dist = Math.min(room, rand(WALK_MIN_PX, WALK_MAX_PX))
     if (dist < 24) {
       schedule(ROAM_RETRY_MS)
-      return
+      return false
     }
+    if (!request('walk')) return false
 
-    clearRaf()
-    clearRoam()
     facing.value = dir > 0 ? 'right' : 'left'
     lean.value = dir > 0 ? WALK_LEAN : -WALK_LEAN
-    state.value = 'walk'
 
     const from = base.x
     const to = base.x + dir * dist
     const dur = Math.min(WALK_MAX_MS, Math.max(WALK_MIN_MS, (dist / WALK_SPEED) * 1000))
     const t0 = performance.now()
-
     const step = (now) => {
       rafId = null
-      if (state.value !== 'walk') return
+      if (state.value !== 'walk' || disposed) return
       const t = Math.min(1, (now - t0) / dur)
-      // 目标点在 startWalk 里已经按视口和 MIN_GAP 夹过，这里不再逐帧读 offsetWidth，
-      // 免得每帧都强制同步布局（拖拽路径有 clamp，是因为那里要跟鼠标瞬时坐标）
       position.pos.value = { x: from + (to - from) * easeInOut(t), y: base.y }
       if (t < 1 && !paused.value) rafId = timers.raf(step)
       else finishWalk()
     }
     rafId = timers.raf(step)
+    return true
   }
 
   function finishWalk() {
@@ -246,39 +316,6 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     else schedule()
   }
 
-  /**
-   * 跳跃：动画帧负责蓄力 / 拉伸 / 落地缓冲，位移用一条正弦抛物曲线。
-   * 起跳前 16% 的时间是蓄力（帧里人物在蹲），所以 lift 延迟 16% 再开始抬升。
-   */
-  function playJump(height = JUMP_PX, force = false) {
-    if (disposed || paused.value || dragging) return
-    if (!force) {
-      if (blocked()) return
-      // 只在 idle 时起跳：不会把招手 / 庆祝 / 发呆从中途打断
-      if (state.value !== 'idle') return
-    }
-    clearRaf()
-    clearRoam()
-    clearSettle()
-    state.value = 'jump'
-    lean.value = 0
-    const dur = clipDuration('jump')
-    const t0 = performance.now()
-
-    const step = (now) => {
-      rafId = null
-      const t = Math.min(1, (now - t0) / dur)
-      const air = Math.max(0, Math.min(1, (t - 0.16) / 0.62))
-      lift.value = Math.sin(Math.PI * air) * height
-      if (t < 1 && !paused.value) rafId = timers.raf(step)
-      else {
-        settleIdle()
-        schedule()
-      }
-    }
-    rafId = timers.raf(step)
-  }
-
   // ---- 拖拽：最高优先级，按下即接管 ----
   function beginDrag() {
     if (dragging) return
@@ -286,17 +323,91 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     clearRaf()
     clearRoam()
     clearSettle()
+    clearWake()
+    pendingOneShot = null
     state.value = 'drag'
+    sleeping.value = false
     lean.value = 0
     lift.value = 0
+    lastInteractAt = Date.now()
   }
 
-  function endDrag() {
+  /**
+   * 松手。带速度时进入甩抛（dsh-pet 的手感），否则播落地缓冲。
+   * @param {number} vx px/ms
+   * @param {number} vy px/ms
+   */
+  function endDrag(vx = 0, vy = 0) {
     if (!dragging) return
     dragging = false
     clearRaf()
-    // 落地缓冲也走一次性动作的统一回归，时长跟着素材走
-    playOneShot('land', true)
+    if (Math.hypot(vx, vy) >= THROW_MIN_V) throwPet(vx, vy)
+    else playOneShot('land', true)
+  }
+
+  /**
+   * 甩抛：指数摩擦 + 边缘反弹，落定后接 land。
+   * 只写 position.pos，不碰 localStorage，结束时统一 save()。
+   */
+  function throwPet(vx = 0, vy = 0) {
+    if (disposed || paused.value) return false
+    const base = position.pos.value || position.defaultPos()
+    if (!base) return false
+    let sx = clamp(vx, -THROW_MAX_V, THROW_MAX_V)
+    let sy = clamp(vy, -THROW_MAX_V, THROW_MAX_V)
+    if (Math.hypot(sx, sy) < THROW_MIN_V) {
+      playOneShot('land', true)
+      return false
+    }
+    if (!request('throw', { force: true })) {
+      playOneShot('land', true)
+      return false
+    }
+
+    facing.value = sx >= 0 ? 'right' : 'left'
+    lean.value = clamp(sx * WALK_LEAN * 0.5, -WALK_LEAN, WALK_LEAN)
+
+    const { w, h } = position.dims()
+    const minX = MIN_GAP
+    const maxX = Math.max(MIN_GAP, window.innerWidth - w - MIN_GAP)
+    const maxY = Math.max(56, window.innerHeight - h - MIN_GAP)
+    const minY = 56
+    let px = clamp(base.x, minX, maxX)
+    let py = clamp(base.y, minY, maxY)
+    const t0 = performance.now()
+    let last = t0
+
+    const step = (now) => {
+      rafId = null
+      if (state.value !== 'throw' || disposed) return
+      const dt = Math.min(32, Math.max(8, now - last))
+      last = now
+      const k = Math.pow(THROW_FRICTION, dt / 16)
+      sx *= k
+      sy *= k
+      px += sx * dt
+      py += sy * dt
+      if (px < minX || px > maxX) {
+        px = clamp(px, minX, maxX)
+        sx = -sx * THROW_BOUNCE
+      }
+      if (py < minY || py > maxY) {
+        py = clamp(py, minY, maxY)
+        sy = -sy * THROW_BOUNCE
+      }
+      position.pos.value = { x: px, y: py }
+      const t = Math.min(1, (now - t0) / THROW_MAX_MS)
+      lift.value = Math.sin(t * Math.PI) * THROW_LIFT_PX
+      if (t < 1 && Math.hypot(sx, sy) > 0.06 && !paused.value) {
+        rafId = timers.raf(step)
+      } else {
+        position.snap()
+        position.save()
+        playOneShot('land', true)
+      }
+    }
+    rafId = timers.raf(step)
+    return true
   }
 
   // ---- 悬停 / 菜单：暂停自主行为，但正在跳 / 招手的那一下会自己播完 ----
@@ -316,70 +427,234 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     if (!hoverHold && !menuHold) schedule(HOLD_RELEASE_MS)
   }
 
-  /**
-   * 被点一下：按权重随机给一个反应（挥手 / 轻跳 / 歪头发呆）。
-   * 参考 dsh-pet 的「点击有开心、害羞、傲娇等多种表现」——固定一个动作太机械。
-   * force = true 是必须的：能点到它，鼠标必然悬停，hoverHold 会挡住普通入口。
-   */
-  function poke() {
-    if (eco.value || !motionOn.value || isMini.value || paused.value || dragging) return
-    if (state.value !== 'idle') return
-    const r = pickWeighted(POKE_REACTIONS)
-    if (!r) return
-    if (r.state === 'jump') playJump(JUMP_PX_TAP, true)
-    else playOneShot(r.state, true)
+  /** 悬停时朝鼠标方向轻微偏一下，表达「注意到你了」（只影响 idle 姿态） */
+  function hoverTilt(dir) {
+    if (state.value !== 'idle' || sleeping.value || eco.value || !motionOn.value) return
+    lean.value = HOVER_LEAN * clamp(dir, -1, 1)
+  }
+
+  /** 点击 Q 弹：先压扁再回弹（参考 dsh-pet 的挤压手感，叠加在帧动画之上） */
+  function pokeSquash() {
+    timers.clear(squashRaf)
+    squashX.value = SQUASH_X
+    squashY.value = SQUASH_Y
+    const t0 = performance.now()
+    const step = (now) => {
+      squashRaf = null
+      const t = Math.min(1, (now - t0) / SQUASH_MS)
+      // cos 回弹：中途过冲一次再收正，比线性回正更像「Q 弹」
+      const k = Math.cos(t * Math.PI * 1.5) * (1 - t)
+      squashX.value = 1 + (SQUASH_X - 1) * k
+      squashY.value = 1 + (SQUASH_Y - 1) * k
+      if (t < 1 && !paused.value) squashRaf = timers.raf(step)
+      else {
+        squashX.value = 1
+        squashY.value = 1
+      }
+    }
+    squashRaf = timers.raf(step)
+  }
+
+  function markInteract() {
+    lastInteractAt = Date.now()
+    boredom.value = 0
+    clearNap()
+    if (state.value === 'idle') napCheck()
   }
 
   /**
-   * 外部业务事件驱动的情绪动作（对应 dsh-desktop-pet 的 event -> semantic state）。
-   *   'celebrate' 发布成功 / 任务完成
-   *   'failed'    保存失败 / 出错
-   *   'think'     思考、摸鱼
-   *   'wave'      打招呼
-   * 只打断 idle / walk，不打断跳跃与拖拽（正在半空中的事让它们自己收尾）。
+   * 点一下：按点击部位（上半身 = 摸头）从不同池子里抽反应。
+   * @param {number} ratio 点击点在身体高度上的比例（0 = 头顶，1 = 脚底）
+   */
+  function pokeAt(ratio = 0.5) {
+    if (eco.value || !motionOn.value || isMini.value || paused.value) return false
+    if (sleeping.value) return false // 睡眠时的点击由上层先唤醒
+    const now = Date.now()
+    if (now - lastPokeAt < POKE_COOLDOWN_MS) return false
+    lastPokeAt = now
+    markInteract()
+
+    const pool = ratio < POKE_UPPER_RATIO ? POKE_REACTIONS.head : POKE_REACTIONS.body
+    const r = pickWeighted(filterCooled(pool, cooldowns)) || pickWeighted(pool)
+    if (!r) return false
+
+    pokeSquash()
+    if (r.state === 'jump') return playJump(JUMP_PX_TAP, true)
+    const ok = playOneShot(r.state, true)
+    if (ok) cooldowns.mark(r.state)
+    return ok
+  }
+
+  /** 兼容旧调用点：不知道部位时按身体中段处理 */
+  function poke() {
+    return pokeAt(0.6)
+  }
+
+  /**
+   * 外部业务事件驱动的情绪动作（对应 dsh-desktop-pet 的 event → semantic state）。
+   *   celebrate 发布成功 / 任务完成；failed 保存失败；think 思考摸鱼；wave 打招呼
+   * 高优先级动作会打断走动；正在跳跃 / 落地时排进 pending，播完再补。
    */
   function react(kind) {
-    if (disposed || paused.value || dragging) return
-    if (state.value !== 'idle' && state.value !== 'walk') return
-    if (state.value === 'walk') {
-      clearRaf()
-      position.save()
+    if (disposed || paused.value) return false
+    if (kind === 'jump') return playJump(JUMP_PX, false)
+    if (kind === 'sleep') return sleep()
+    if (kind === 'wake') return wake(true)
+    return request(kind, { force: false })
+  }
+
+  // ---- 待机打盹（参考 dsh-pet 的睡觉状态：入睡 → 循环 → 起床） ----
+  function napCheck() {
+    clearNap()
+    if (disposed || paused.value) return
+    boredom.value = boredom01()
+    if (!napOn.value || sleeping.value || state.value !== 'idle') return
+
+    const threshold = isSleepy.value ? BOREDOM_NAP_MS_NIGHT : BOREDOM_NAP_MS
+    const idleFor = Date.now() - lastInteractAt
+    if (idleFor >= threshold) {
+      sleep()
+      return
     }
-    if (kind === 'jump') playJump(JUMP_PX, true)
-    else playOneShot(kind, true)
+    napId = timers.timeout(napCheck, Math.max(3000, Math.min(12000, threshold - idleFor + 200)))
+  }
+
+  /** 入睡：状态切到 sleep 剪辑，并排一个「睡饱自己醒」的定时器 */
+  function armWakeTimer() {
+    clearWake()
+    wakeId = timers.timeout(() => {
+      wakeId = null
+      if (sleeping.value) wake(false)
+    }, NAP_MIN_MS + rand(0, 16000))
+  }
+
+  function sleep() {
+    if (disposed || paused.value || sleeping.value || state.value !== 'idle') return false
+    if (!napOn.value) return false
+    enterState('sleep')
+    clearNap()
+    clearRoam()
+    armWakeTimer()
+    return true
+  }
+
+  /** 叫醒：被用户点 / 拖 / 自动睡饱都会走这里；greet=true 时招个手 */
+  function wake(greet = true) {
+    if (!sleeping.value) return false
+    sleeping.value = false
+    clearWake()
+    lastInteractAt = Date.now()
+    boredom.value = 0
+    state.value = 'idle'
+    lean.value = 0
+    lift.value = 0
+    if (greet) playOneShot('wave', true)
+    schedule()
+    napCheck()
+    return true
+  }
+
+  function behave() {
+    roamId = null
+    if (blocked()) return
+    if (sleeping.value) return
+    if (reduced.value) {
+      schedule(rand(ROAM_MIN_MS, ROAM_MAX_MS))
+      return
+    }
+
+    const pool = filterCooled(
+      behaviorWeights({
+        route: routeName?.value || '',
+        hour: new Date().getHours(),
+        boredom: boredom01(),
+        roam: roamOn.value
+      }),
+      cooldowns
+    )
+    // 池子被冷却清空时退回「发呆」，保证不会因为全在冷却就干站着
+    const pick = pickWeighted(pool) || (cooldowns.ready('think') ? { state: 'think' } : { state: 'wave' })
+
+    if (pick.state === 'walk') startWalk()
+    else if (pick.state === 'jump') playJump(JUMP_PX)
+    else if (pick.state === 'sleep') {
+      if (!sleep()) schedule()
+    } else {
+      const ok = playOneShot(pick.state)
+      if (ok) cooldowns.mark(pick.state)
+      else schedule(ROAM_RETRY_MS)
+    }
   }
 
   /** 外部（收起 / 切后台 / 省电）统一暂停：清掉所有在途的动画与排程 */
   function pause() {
     paused.value = true
+    pausedAt = Date.now()
     clearRaf()
     clearRoam()
     clearSettle()
-    settleIdle()
+    clearNap()
+    clearWake()
+    pendingOneShot = null
+    timers.clear(squashRaf)
+    squashRaf = null
+    squashX.value = 1
+    squashY.value = 1
+    if (sleeping.value) {
+      state.value = 'sleep'
+      lean.value = 0
+      lift.value = 0
+    } else {
+      settleIdle()
+    }
   }
 
   function resume() {
     if (disposed) return
     paused.value = false
+    // 后台待了多久都不算「无聊」，否则一回来就打盹
+    if (pausedAt) {
+      lastInteractAt += Date.now() - pausedAt
+      pausedAt = 0
+    }
+    if (sleeping.value) {
+      state.value = 'sleep'
+      armWakeTimer()
+      napCheck()
+      return
+    }
     settleIdle()
     schedule(rand(2600, 6200))
+    napCheck()
   }
 
   function onSettingChange() {
     clearRaf()
     clearRoam()
     clearSettle()
+    clearNap()
+    clearWake()
+    pendingOneShot = null
+    if (!napOn.value && sleeping.value) {
+      sleeping.value = false
+    }
     settleIdle()
     if (!blocked()) schedule(rand(1800, 4200))
+    napCheck()
   }
-  watch([eco, motionOn, roamOn], onSettingChange)
+  watch([eco, motionOn, roamOn, napOn], onSettingChange)
 
   onBeforeUnmount(() => {
     disposed = true
     clearRaf()
     clearRoam()
     clearSettle()
-    mq?.removeEventListener?.('change', onMq)
+    clearNap()
+    clearWake()
+    if (mq) {
+      if (mq.removeEventListener) mq.removeEventListener('change', onMq)
+      else if (mq.removeListener) mq.removeListener(onMq)
+    }
   })
 
   return {
@@ -391,6 +666,10 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     frozen,
     playbackRate,
     clip,
+    sleeping,
+    boredom,
+    squashX,
+    squashY,
     hold,
     release,
     beginDrag,
@@ -398,10 +677,16 @@ export function useMascotMotion({ timers, position, faceKey, settings, isMini, i
     playJump,
     playOneShot,
     poke,
-    nudge: poke, // 兼容旧调用点：语义已经是「被戳一下的随机反应」
+    pokeAt,
+    nudge: poke,
     react,
+    sleep,
+    wake,
+    hoverTilt,
+    markInteract,
     pause,
     resume,
-    startWalk
+    startWalk,
+    throwPet
   }
 }

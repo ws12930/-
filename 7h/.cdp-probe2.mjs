@@ -1,0 +1,16 @@
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms))
+const targets=await (await fetch('http://127.0.0.1:9333/json/list')).json()
+const t=targets.find(x=>x.type==='page')
+const ws=new WebSocket(t.webSocketDebuggerUrl)
+let seq=0;const pend=new Map()
+ws.onmessage=(ev)=>{const m=JSON.parse(ev.data);if(m.id&&pend.has(m.id)){const{resolve,reject}=pend.get(m.id);pend.delete(m.id);m.error?reject(new Error(JSON.stringify(m.error))):resolve(m.result)}}
+await new Promise(r=>ws.onopen=r)
+const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pend.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}))})
+const js=async(e)=>{const r=await send('Runtime.evaluate',{expression:e,returnByValue:true,awaitPromise:true,userGesture:true});if(r.exceptionDetails)return 'ERR: '+(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value}
+await send('Runtime.enable')
+console.log('res:', JSON.stringify(await js(`performance.getEntriesByType('resource').map(e=>e.name.replace('http://127.0.0.1:5199','')+' '+e.initiatorType)`),null,0))
+console.log('fetch main:', await js(`fetch('/src/main.js').then(r=>r.status+' '+r.headers.get('content-type'))`))
+console.log('import main:', await js(`import('/src/main.js').then(()=>'ok').catch(e=>'ERR '+e.message)`))
+await sleep(1500)
+console.log('#app len:', await js("document.querySelector('#app').innerHTML.length"))
+ws.close();process.exit(0)

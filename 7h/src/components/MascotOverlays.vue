@@ -53,6 +53,10 @@
         </button>
         <button type="button" role="menuitem" @click="act('next')">换个表情</button>
         <button type="button" role="menuitem" @click="act('jump')">跳一下</button>
+        <button type="button" role="menuitem" @click="act('wave')">招个手</button>
+        <button type="button" role="menuitem" @click="act(napping ? 'wake' : 'sleep')">
+          {{ napping ? '叫醒青禾' : '睡一会儿' }}
+        </button>
         <button type="button" role="menuitem" @click="act('toggleMute')">
           {{ muted ? '取消静音' : '暂时静音' }}
         </button>
@@ -122,6 +126,14 @@
           <label class="mc-set-row mc-set-check">
             <input
               type="checkbox"
+              :checked="settings.nap !== false"
+              @change="change('nap', $event.target.checked)"
+            />
+            <span>待机打盹</span>
+          </label>
+          <label class="mc-set-row mc-set-check">
+            <input
+              type="checkbox"
               :checked="settings.eco"
               @change="change('eco', $event.target.checked)"
             />
@@ -168,6 +180,7 @@ const props = defineProps({
   dragging: { type: Boolean, default: false },
   muted: { type: Boolean, default: false },
   mini: { type: Boolean, default: false },
+  napping: { type: Boolean, default: false },
   settings: { type: Object, required: true }
 })
 

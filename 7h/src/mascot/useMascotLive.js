@@ -32,7 +32,7 @@ function readCount(res) {
   return Number.isFinite(n) ? n : 0
 }
 
-export function useMascotLive({ timers, speak, isMuted, isMini }) {
+export function useMascotLive({ timers, speak, react, isMuted, isMini }) {
   const unread = ref({ notifications: 0, messages: 0 })
   let lastLevel = null
   let lastCheckinHintAt = 0
@@ -47,7 +47,11 @@ export function useMascotLive({ timers, speak, isMuted, isMini }) {
     return Date.now() - lastAt >= LIVE_COOLDOWN_MS
   }
 
-  function say(text, key) {
+  /**
+   * mood 是可选的情绪动作（wave / celebrate）。只在真的说出口时顺带播，
+   * 被防打扰门禁挡掉时不播，避免「静音了还在手舞足蹈」。
+   */
+  function say(text, key, mood) {
     if (!canSpeak(key === 'checkin' ? lastCheckinHintAt : key === 'msg' ? lastMsgHintAt : lastNotifHintAt)) return
     const now = Date.now()
     if (key === 'checkin') lastCheckinHintAt = now
@@ -55,6 +59,7 @@ export function useMascotLive({ timers, speak, isMuted, isMini }) {
     else lastNotifHintAt = now
     spokenThisRoute += 1
     speak(text)
+    if (mood && typeof react === 'function') react(mood)
   }
 
   async function fetchCheckin() {
@@ -89,14 +94,14 @@ export function useMascotLive({ timers, speak, isMuted, isMini }) {
       return
     }
 
-    if (notif > unread.value.notifications) say('有人找你啦，去看看通知吧', 'notif')
-    else if (msg > unread.value.messages) say('收到新消息啦，要不要回一句？', 'msg')
+    if (notif > unread.value.notifications) say('有人找你啦，去看看通知吧', 'notif', 'wave')
+    else if (msg > unread.value.messages) say('收到新消息啦，要不要回一句？', 'msg', 'wave')
     unread.value = { notifications: notif, messages: msg }
 
     if (checkin) {
       const level = Number(checkin.level) || 0
       if (lastLevel != null && level > lastLevel) {
-        say(`升级啦！现在是${checkin.title || `Lv.${level}`}，再写点什么？`, 'checkin')
+        say(`升级啦！现在是${checkin.title || `Lv.${level}`}，再写点什么？`, 'checkin', 'celebrate')
       } else if (checkin.checked === false && canSpeak(lastCheckinHintAt)) {
         const streak = Number(checkin.streak) || 0
         say(streak > 1 ? `已经连着签到 ${streak} 天啦，今天也顺手点一下吧` : '今天还没签到呢，顺手点一下吧', 'checkin')

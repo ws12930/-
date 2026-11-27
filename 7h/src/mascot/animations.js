@@ -36,6 +36,9 @@ export const CLIPS = {
   jump: { sheet: 'jump', frames: 10, fps: 15, loop: false },
   drag: { sheet: 'drag', frames: 6, fps: 10, loop: true },
   land: { sheet: 'land', frames: 5, fps: 20, loop: false },
+  // 甩飞：沿用「被拎住」的姿态循环，位移与离地由状态机算；
+  // 落点到达后接 land，视觉上像被丢出去再站稳。
+  throw: { sheet: 'drag', frames: 6, fps: 10, loop: true },
 
   // ↓ 参考 DSH（DeepSeek Harness）桌宠插件补齐的状态
   //   wave     对应 Kun Like Pet 的 wave（点击回应）
@@ -49,14 +52,11 @@ export const CLIPS = {
 }
 
 /**
- * 待机时偶尔插入的一次性小动作，按权重抽取。
- * 参考 dsh-pet「一百多段动画按权重首尾衔接」的做法：与其一直呼吸，
- * 不如隔一阵自己玩一下，看起来才像活的。
+ * 待机小动作池的兼容出口。
+ * 权重表已迁到 actions.js（那里同时管优先级与冷却），这里保留导出，
+ * 避免外部或旧文档里的 `IDLE_VARIANTS` 引用断掉。
  */
-export const IDLE_VARIANTS = [
-  { state: 'think', weight: 55 },
-  { state: 'wave', weight: 45 }
-]
+export { IDLE_VARIANTS } from './actions'
 
 /** 由 Vite 在构建时收集所有帧条，返回 文件名 -> 产物 URL */
 const SHEETS = import.meta.glob('../assets/mascot/anim/*.webp', {
@@ -75,7 +75,8 @@ const SHEETS = import.meta.glob('../assets/mascot/anim/*.webp', {
  */
 export const CUSTOM_SHEETS = {}
 
-function sheetUrl(faceKey, sheet) {
+/** 某个表情 + 状态对应的帧条 URL（未命中返回 ''，调用方会兜底到 idle） */
+export function sheetUrl(faceKey, sheet) {
   return SHEETS[`../assets/mascot/anim/${faceKey}-${sheet}.webp`] || ''
 }
 
@@ -120,25 +121,7 @@ export function resolveClip(faceKey, state, facing, opts = {}) {
 }
 
 /**
- * 页面空闲时把某个表情的其余动作帧条预热掉。
- * 不预热的话，第一次从 idle 切到 walk 会有一瞬间的空窗（图和气泡都换了、画面还没解码完）。
- * 逐个串行加载，避免和首屏的关键资源抢带宽。
+ * 素材预热统一由 `mascot/assets.js` 负责（预解码 + 分层排队 + 失败重试），
+ * 这里不再保留第二套 `new Image()` 预热，避免同一张图被解码两次。
+ * 旧调用点：`import { preloadMotion } from '../mascot/assets'`
  */
-let preloaded = null
-export function preloadMotion(faceKey) {
-  if (preloaded === faceKey) return
-  preloaded = faceKey
-  const run = async () => {
-    for (const def of Object.values(CLIPS)) {
-      const url = sheetUrl(faceKey, def.sheet)
-      if (!url) continue
-      await new Promise((resolve) => {
-        const im = new Image()
-        im.onload = im.onerror = resolve
-        im.src = url
-      })
-    }
-  }
-  const idle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 2500))
-  idle(run, { timeout: 6000 })
-}

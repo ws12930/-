@@ -11,12 +11,21 @@ import {
   SCENE_FACE,
   POSTED,
   DRAFTED,
+  SAVE_FAILED,
   daypartLine,
   BUBBLE_MS,
   SAVE_NUDGE_MS,
   CHATTER_MIN_MS,
   CHATTER_JITTER_MS
 } from './config'
+
+/** 归一化保存结果：EditorView 派发 PUBLISHED / DRAFT / ERROR，其余一律按发布成功处理 */
+export function normalizeSaveStatus(status) {
+  const s = String(status ?? '').trim().toUpperCase()
+  if (s === 'ERROR') return 'ERROR'
+  if (s === 'DRAFT') return 'DRAFT'
+  return 'PUBLISHED'
+}
 
 export function useMascotSpeech({ timers, getFace, isMuted, isMini, route }) {
   const line = ref('')
@@ -70,9 +79,17 @@ export function useMascotSpeech({ timers, getFace, isMuted, isMini, route }) {
     speak(scene.length ? pickFresh(scene) : pickFresh(getFace().lines))
   }
 
-  /** 编辑器保存后：detail.status 是字符串状态，DRAFT 才算草稿 */
+  /**
+   * 编辑器保存后：detail.status 为 PUBLISHED / DRAFT / ERROR。
+   * 旧版只认 DRAFT，其余全部按「发布成功」播报，保存失败时会说出「发布成功！」——
+   * 现在三态分开，并把归一化结果返回给调用方，由它决定播哪个情绪动作。
+   * 返回 kind 不受 speak() 门禁影响：静音时不说话，动作照样可以给。
+   */
   function speakSaved(status) {
-    speak(pickFresh(String(status ?? '').toUpperCase() === 'DRAFT' ? DRAFTED : POSTED))
+    const kind = normalizeSaveStatus(status)
+    const pool = kind === 'ERROR' ? SAVE_FAILED : kind === 'DRAFT' ? DRAFTED : POSTED
+    speak(pickFresh(pool))
+    return kind
   }
 
   /** 随机冒话：25-50s 一次，优先说当前场景的话 / 分时段问候 */

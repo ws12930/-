@@ -5,9 +5,14 @@
       * 状态机需要「第几帧 / 播完没有 / 单次播放后停下」这些信息，CSS 动画给不了；
       * 同一套代码还要能吃 GIF（网上开源的 Shimeji 素材大多是 GIF / PNG 序列），
         GIF 必须解码成帧才能受状态机控制。
-    指针事件全部由外层 <button> 处理，canvas 只负责画，不拦截鼠标。
+    两个 canvas 叠在一起：主层画当前剪辑，淡出层保存切换前的最后一帧。
+    状态切换时旧帧在上层渐隐、新帧在下层出现，等价于一次交叉淡化（参考 Shimeji
+    「动作首尾相接」与 dsh-pet「动画无缝衔接」的做法）。
   -->
-  <canvas ref="canvasEl" class="mc-canvas" aria-hidden="true"></canvas>
+  <span class="mc-stage">
+    <canvas ref="canvasEl" class="mc-canvas" aria-hidden="true"></canvas>
+    <canvas ref="fadeEl" class="mc-canvas mc-canvas-fade" aria-hidden="true"></canvas>
+  </span>
 </template>
 
 <script setup>
@@ -17,26 +22,15 @@
  *   2. GIF：按需动态 import gifuct-js 解码（MIT，https://github.com/matt-way/gifuct-js），
  *      只有真的用到 .gif 素材时才会加载这个依赖，默认路径零开销。
  *
- * 与状态机的契约：非循环动画播完 emit('ended')；paused 时不推进帧但保留当前画面；
- * 切换 src 时旧画面继续显示直到新图解码完成，避免状态切换时闪一下空白。
- *
- * ===== 帧率优化（本轮重点，参考 DSH 桌宠插件的「按 pose+frameIndex 下指令」思路）=====
- * 旧版用 requestAnimationFrame 每帧轮询：idle 只要 5fps、sleep 只要 2.5fps，
- * 却要跟着屏幕刷新率跑 60 / 120 / 144 次回调，其中九成以上什么都不画。
- * 高刷屏越贵，纯属白烧 CPU 和电。
- *
- * 现在改成「按目标帧延迟自调度的定时器」：
- *   - 唤醒次数 == 素材帧率，与屏幕刷新率彻底解耦（5fps 就是每秒 5 次唤醒）；
- *   - 用绝对时间基准 nextAt 校正 setTimeout 的抖动，长时间播放不会累积漂移；
- *   - 掉队超过 3 帧（切后台被节流 / 主线程长任务）直接把基准拉回现在，不追赶补帧 ——
- *     一次性动作的时长由状态机 clipDuration 独立计时，画面不补帧不会把动作卡住；
- *   - playbackRate 直接折算进帧延迟，倍速不额外增加调度层级；
- *   - 标签页隐藏时彻底停表，回来重新起表，不会在后台偷偷跑一整晚。
- *
- * 位移（走动 / 跳跃）仍走 rAF 保持顺滑，两者互不干扰：这里只管「画面第几帧」。
+ * 本轮改造：
+ * - 素材统一走 mascot/assets.js 的缓存（ImageBitmap 优先，预载与播放器共用一次解码）；
+ * - 切换 src 时不再硬切：旧帧先复制到淡出层，新帧解码完成后再淡出旧帧；
+ * - 保持「按目标帧延迟自调度」，唤醒次数 == 素材帧率，与屏幕刷新率解耦；
+ * - 掉队超过 3 帧直接拉回基准、不补帧；标签页隐藏时彻底停表。
  */
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { CELL } from '../mascot/animations'
+import { loadSheet } from '../mascot/assets'
 
 const props = defineProps({
   src: { type: String, default: '' },
@@ -45,45 +39,33 @@ const props = defineProps({
   loop: { type: Boolean, default: true },
   paused: { type: Boolean, default: false },
   playbackRate: { type: Number, default: 1 },
+  fadeMs: { type: Number, default: 0 },
   cellW: { type: Number, default: CELL.w },
   cellH: { type: Number, default: CELL.h }
 })
 const emit = defineEmits(['ended'])
 
 const canvasEl = ref(null)
+const fadeEl = ref(null)
 let ctx = null
-let timerId = null   // 取代 rafId：现在是「下一帧到期」的一次性定时器
+let fadeCtx = null
+let timerId = null // 「下一帧到期」的一次性定时器
+let fadeTimer = null
 let token = 0
 let sheetImg = null
-let gif = null       // { frames: [...], canvas, ctx, w, h }
+let gif = null // { frames: [...], canvas, ctx, w, h }
 let frame = 0
-let nextAt = 0       // 下一帧的目标时刻（performance.now 基准）
+let nextAt = 0
 let ended = false
 let lastDrawn = -1
 let hidden = false
 
 /**
  * 开发期统计：wakes = 调度唤醒次数，draws = 实际重绘次数。
- * 用来量化验证「唤醒次数 == 目标帧率」，也便于排查有没有多余的空转。
  * 生产构建里 import.meta.env.DEV 为 false，整段会被 Vite 摇掉。
  */
 const stats = { wakes: 0, draws: 0 }
 if (import.meta.env.DEV && typeof window !== 'undefined') window.__mascotSpriteStats = stats
-
-const imgCache = new Map()
-
-function loadImage(url) {
-  if (imgCache.has(url)) return imgCache.get(url)
-  const p = new Promise((resolve, reject) => {
-    const im = new Image()
-    im.decoding = 'async'
-    im.onload = () => resolve(im)
-    im.onerror = () => reject(new Error('图片加载失败：' + url))
-    im.src = url
-  })
-  imgCache.set(url, p)
-  return p
-}
 
 function syncCanvas() {
   const c = canvasEl.value
@@ -99,6 +81,43 @@ function syncCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
+
+  const f = fadeEl.value
+  if (f) {
+    if (f.width !== w || f.height !== h) {
+      f.width = w
+      f.height = h
+    }
+    fadeCtx = f.getContext('2d')
+    fadeCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
+}
+
+/** 把当前画面 1:1 复制到淡出层（像素尺寸相同，不经过 dpr 变换） */
+function captureFade() {
+  const c = canvasEl.value
+  const f = fadeEl.value
+  if (!c || !f || !fadeCtx || lastDrawn < 0) return false
+  fadeCtx.setTransform(1, 0, 0, 1, 0, 0)
+  fadeCtx.clearRect(0, 0, f.width, f.height)
+  fadeCtx.drawImage(c, 0, 0)
+  return true
+}
+
+/** 旧帧淡出：先把淡出层点亮，下一帧再挂 transition 收到 0 */
+function revealFade() {
+  const f = fadeEl.value
+  if (!f || !(props.fadeMs > 0)) return
+  f.style.transition = 'none'
+  f.style.opacity = '1'
+  // 强制 reflow，保证下一行挂上的 transition 能生效
+  void f.offsetWidth
+  f.style.transition = `opacity ${props.fadeMs}ms ease-out`
+  f.style.opacity = '0'
+  window.clearTimeout(fadeTimer)
+  fadeTimer = window.setTimeout(() => {
+    f.style.opacity = '0'
+  }, props.fadeMs + 40)
 }
 
 /** 把任意尺寸的图按「等比 + 底边对齐」画进单元格 */
@@ -213,8 +232,8 @@ function onTick() {
   stats.wakes += 1
   const now = performance.now()
 
-  // 掉队太多就放弃追赶：直接把基准拉回现在。补帧只会让画面「瞬移」，
-  // 而动作时长由状态机独立计时，不补帧不会让跳跃 / 落地卡住。
+  // 掉队太多就放弃追赶：补帧只会让画面「瞬移」，
+  // 而动作时长由状态机独立计时，不补帧不会让动作卡住。
   if (now - nextAt > frameDelay() * 3) nextAt = now
 
   const total = totalFrames()
@@ -235,7 +254,6 @@ function onTick() {
   }
 
   if (lastDrawn !== frame) draw()
-  // GIF 每帧 delay 可能不同，用推进后这一帧的时长排下一次
   nextAt += frameDelay()
   arm()
 }
@@ -255,6 +273,11 @@ async function load() {
   stop()
   const url = props.src
   if (!url) return
+
+  // 先留一张旧帧快照：新图解码期间主层继续显示旧画面，解码完成后再淡出
+  const canFade = props.fadeMs > 0 && props.frames > 1 && !props.paused
+  const hasSnap = canFade && captureFade()
+
   try {
     if (/\.gif($|\?)/i.test(url)) {
       const decoded = await decodeGif(url)
@@ -262,13 +285,17 @@ async function load() {
       gif = decoded
       sheetImg = null
     } else {
-      const im = await loadImage(url)
+      const im = await loadSheet(url)
       if (my !== token) return
+      if (!im) {
+        // 素材坏了不能把桌宠整个拖垮：保持上一帧画面，控制台留一条线索
+        console.warn('[mascot] 帧素材加载失败', url)
+        return
+      }
       sheetImg = im
       gif = null
     }
   } catch (e) {
-    // 素材坏了不能把桌宠整个拖垮：保持上一帧画面，控制台留一条线索
     console.warn('[mascot] 帧素材加载失败', e)
     return
   }
@@ -277,6 +304,7 @@ async function load() {
   lastDrawn = -1
   draw()
   play()
+  if (hasSnap) revealFade()
 }
 
 function restart() {
@@ -304,6 +332,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   token += 1
   stop()
+  window.clearTimeout(fadeTimer)
   document.removeEventListener('visibilitychange', onVisibility)
 })
 
